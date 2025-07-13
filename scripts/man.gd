@@ -11,6 +11,7 @@ class_name Man
 
 const ANIM_IDLE: String = "CharacterArmature|CharacterArmature|CharacterArmature|Idle_Hold"
 const ANIM_WALK: String = "CharacterArmature|CharacterArmature|CharacterArmature|Walk_Hold"
+const ANIM_RUN: String = "CharacterArmature|CharacterArmature|CharacterArmature|Run_Hold"
 
 # Camera orbit parameters
 var orbit_distance: float = 5.0
@@ -20,7 +21,8 @@ var mouse_sensitivity: float = 0.01
 var is_rotating_camera: bool = false
 
 # Movement parameters
-var movement_speed: float = 5.0
+var base_movement_speed: float = 5.0
+var run_speed_multiplier: float = 1.5
 var movement_acceleration: float = 20.0
 var movement_friction: float = 20.0
 
@@ -57,6 +59,12 @@ func handle_movement(delta: float) -> void:
 		input_dir.z += 1
 	if Input.is_action_pressed("ui_up") or Input.is_key_pressed(KEY_W):
 		input_dir.z -= 1
+	
+	# Check if running (holding Shift)
+	var is_running = Input.is_key_pressed(KEY_SHIFT)
+	var current_speed = base_movement_speed
+	if is_running:
+		current_speed *= run_speed_multiplier
 	
 	# Convert input to camera-relative movement
 	var camera_forward = -camera_3d.global_transform.basis.z
@@ -117,7 +125,7 @@ func handle_movement(delta: float) -> void:
 	# Apply movement
 	if input_dir.length() > 0:
 		# Player is actively moving
-		var target_velocity = effective_dir * movement_speed * speed_multiplier
+		var target_velocity = effective_dir * current_speed * speed_multiplier
 		velocity.x = move_toward(velocity.x, target_velocity.x, movement_acceleration * delta)
 		velocity.z = move_toward(velocity.z, target_velocity.z, movement_acceleration * delta)
 		
@@ -139,9 +147,9 @@ func handle_movement(delta: float) -> void:
 			var pull_rotation = atan2(leash_pull_force.x, leash_pull_force.z)
 			rotation.y = lerp_angle(rotation.y, pull_rotation, 5.0 * delta)
 	
-	# Handle animation based on horizontal movement
+	# Handle animation based on horizontal movement and running state
 	var horizontal_velocity = Vector3(velocity.x, 0, velocity.z)
-	handle_animation(horizontal_velocity)
+	handle_animation(horizontal_velocity, is_running)
 
 func update_camera() -> void:
 	var zoom: float = 2
@@ -154,10 +162,13 @@ func update_camera() -> void:
 	camera_3d.global_transform.origin = global_position + zoom * offset
 	camera_3d.look_at(global_position + Vector3(0, 1, 0), Vector3.UP)
 
-func handle_animation(current_velocity: Vector3) -> void:
+func handle_animation(current_velocity: Vector3, is_running: bool) -> void:
 	var anim = ANIM_IDLE
 	if current_velocity.length() > 0.05:
-		anim = ANIM_WALK
+		if is_running:
+			anim = ANIM_RUN
+		else:
+			anim = ANIM_WALK
 	if ap.current_animation != anim:
 		ap.play(anim, 0.1)
 

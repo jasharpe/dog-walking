@@ -22,4 +22,5 @@ func _ready() -> void:
 	for i in range(20):
 		var bush := bush_scene.instantiate() as Bush
 		bush.position = Vector3(randf_range(-25, 25), 0, randf_range(-25, 25))
+		bush.rotate_y(randf_range(0, TAU))
 		add_child(bush)
