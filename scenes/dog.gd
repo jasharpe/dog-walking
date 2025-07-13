@@ -3,7 +3,7 @@ class_name Dog
 
 @export var man: Man
 @export var leash_length: float
-@onready var neck: BoneAttachment3D = $Model/RootNode/AnimalArmature/Skeleton3D/Neck
+@onready var neck: Node3D = $Model/RootNode/AnimalArmature/Skeleton3D/Neck/NeckNode
 @onready var ap: AnimationPlayer = $"Model/AnimationPlayer"
 @onready var model: Node3D = $Model
 
