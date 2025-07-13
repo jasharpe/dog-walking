@@ -6,6 +6,7 @@ class_name Dog
 @onready var neck: Node3D = $Model/RootNode/AnimalArmature/Skeleton3D/Neck/NeckNode
 @onready var ap: AnimationPlayer = $"Model/AnimationPlayer"
 @onready var model: Node3D = $Model
+@onready var alert: Label3D = $Alert
 
 var ANIM_IDLE: String = "AnimalArmature|AnimalArmature|AnimalArmature|Idle"
 var ANIM_WALK: String = "AnimalArmature|AnimalArmature|AnimalArmature|Walk"
@@ -49,6 +50,12 @@ func _ready() -> void:
 		man_previous_position = man.global_position
 
 func _physics_process(delta: float) -> void:
+	var camera = get_viewport().get_camera_3d()
+	if camera:
+		alert.look_at(camera.global_position, Vector3.UP)
+		alert.rotation.x = 0
+		alert.rotation.z = 0
+	
 	track_man_movement(delta)
 	determine_behavior_state()
 	handle_movement(delta)
