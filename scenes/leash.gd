@@ -268,6 +268,7 @@ func generate_rope_points(start: Vector3, end: Vector3, sag: float) -> Array[Vec
 		# Add parabolic sag (downward curve)
 		var sag_factor = 4.0 * t * (1.0 - t)  # Parabolic curve (peaks at t=0.5)
 		point.y -= sag * sag_factor
+		point.y = max(0, point.y)
 		
 		points.append(point)
 	
