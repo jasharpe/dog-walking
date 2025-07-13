@@ -1,6 +1,9 @@
 extends Node3D
 class_name Dog
 
+@export var man: Man
+@export var leash_length: float
+
 @onready var neck: BoneAttachment3D = $Model/RootNode/AnimalArmature/Skeleton3D/Neck
 
 @onready var ap: AnimationPlayer = $"Model/AnimationPlayer"

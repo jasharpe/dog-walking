@@ -1,5 +1,9 @@
+# TODO: Convert this to CharacterBody3D
 extends Node3D
 class_name Man
+
+@export var dog: Dog
+@export var leash_length: float
 
 @onready var hand: BoneAttachment3D = $Model/RootNode/CharacterArmature/Skeleton3D/Hand
 @onready var camera_3d: Camera3D = $Camera3D
@@ -18,8 +22,8 @@ var is_rotating_camera: bool = false
 
 # Movement parameters
 var movement_speed: float = 5.0
-var movement_acceleration: float = 10.0
-var movement_friction: float = 8.0
+var movement_acceleration: float = 20.0
+var movement_friction: float = 20.0
 var current_velocity: Vector3 = Vector3.ZERO
 
 func _process(delta: float) -> void:
@@ -51,6 +55,11 @@ func handle_movement(delta: float) -> void:
 	
 	# Calculate movement direction relative to camera
 	var movement_dir = (camera_right * input_dir.x + camera_forward * -input_dir.z).normalized()
+	
+	# TODO: Calculate effective_dir using direction of dog and its global distance relative to the
+	# leash_length. The man is stronger so he will overcome, but his top speed should be reduced
+	# smoothly from 1 (with any amount of slack) down to 0.5 (with negative slack against his
+	# direction), or up to 1.5 with 
 	
 	# Apply movement with acceleration/friction
 	if input_dir.length() > 0:
