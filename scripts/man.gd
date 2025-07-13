@@ -70,20 +70,60 @@ func handle_movement(delta: float) -> void:
 	# Calculate movement direction relative to camera
 	var movement_dir = (camera_right * input_dir.x + camera_forward * -input_dir.z).normalized()
 	
-	# Apply movement with acceleration/friction to horizontal velocity
-	if input_dir.length() > 0:
-		var target_velocity = movement_dir * movement_speed
-		velocity.x = move_toward(velocity.x, target_velocity.x, movement_acceleration * delta)
-		velocity.z = move_toward(velocity.z, target_velocity.z, movement_acceleration * delta)
+	# Calculate leash physics
+	var effective_dir = movement_dir
+	var speed_multiplier = 1.0
+
+	if dog != null:
+		# Calculate distance between man and dog
+		var dog_to_man = global_position - dog.global_position
+		var distance = dog_to_man.length()
 		
-		# Rotate model to face movement direction
-		if movement_dir.length() > 0:
-			var target_rotation = atan2(movement_dir.x, movement_dir.z)
-			model.rotation.y = lerp_angle(model.rotation.y, target_rotation, 10.0 * delta)
-	else:
-		# Apply friction when no input
-		velocity.x = move_toward(velocity.x, 0.0, movement_friction * delta)
-		velocity.z = move_toward(velocity.z, 0.0, movement_friction * delta)
+		# Calculate slack (positive = slack, negative = tension)
+		var slack = leash_length - distance
+		
+		if slack < 0:  # Leash is taut
+			# Calculate the direction the leash is pulling (from man toward dog)
+			var leash_direction = -dog_to_man.normalized()
+			
+			# Project the desired movement onto the leash direction
+			var movement_along_leash = movement_dir.dot(leash_direction)
+			
+			# Calculate how much the movement opposes the leash
+			var opposition = -movement_along_leash  # positive when moving away from dog
+			
+			# Adjust speed based on leash tension and movement direction
+			if movement_along_leash > 0:
+				# Moving toward dog (with the leash tension) - speed up
+				speed_multiplier = lerp(1.0, 1.5, min(abs(slack) / leash_length, 1.0))
+			else:
+				# Moving away from dog (against the leash tension) - slow down
+				speed_multiplier = lerp(1.0, 0.5, min(abs(slack) / leash_length, 1.0))
+			
+			# Modify movement direction to account for leash constraint
+			# The man can still move, but with reduced effectiveness perpendicular to leash
+			var perpendicular_component = movement_dir - (movement_dir.dot(leash_direction) * leash_direction)
+			var parallel_component = movement_dir.dot(leash_direction) * leash_direction
+			
+			# Reduce perpendicular movement when leash is very taut
+			var tension_factor = min(abs(slack) / (leash_length * 0.1), 1.0)  # 0.1 = 10% of leash length
+			effective_dir = parallel_component + perpendicular_component * (1.0 - tension_factor * 0.5)
+			effective_dir = effective_dir.normalized()
+
+		# Apply movement with leash-modified direction and speed
+		if input_dir.length() > 0:
+			var target_velocity = effective_dir * movement_speed * speed_multiplier
+			velocity.x = move_toward(velocity.x, target_velocity.x, movement_acceleration * delta)
+			velocity.z = move_toward(velocity.z, target_velocity.z, movement_acceleration * delta)
+			
+			# Rotate model to face movement direction
+			if effective_dir.length() > 0:
+				var target_rotation = atan2(effective_dir.x, effective_dir.z)
+				model.rotation.y = lerp_angle(model.rotation.y, target_rotation, 10.0 * delta)
+		else:
+			# Apply friction when no input
+			velocity.x = move_toward(velocity.x, 0.0, movement_friction * delta)
+			velocity.z = move_toward(velocity.z, 0.0, movement_friction * delta)
 	
 	# Handle animation based on horizontal movement
 	var horizontal_velocity = Vector3(velocity.x, 0, velocity.z)
