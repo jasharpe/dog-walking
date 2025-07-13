@@ -1,0 +1,20 @@
+[gd_scene load_steps=4 format=3 uid="uid://bfyab2x6pnnf8"]
+
+[ext_resource type="Script" uid="uid://bprkbovmm8r3" path="res://scripts/bush.gd" id="1_ehqem"]
+[ext_resource type="PackedScene" uid="uid://cho8w04dv6bke" path="res://models/Bush.glb" id="1_lad4k"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_ehqem"]
+radius = 1.563
+
+[node name="Bush" type="Node3D"]
+script = ExtResource("1_ehqem")
+
+[node name="Root Scene" parent="." instance=ExtResource("1_lad4k")]
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.712344, 0)
+shape = SubResource("SphereShape3D_ehqem")
+
+[editable path="Root Scene"]

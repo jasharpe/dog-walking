@@ -7,6 +7,7 @@ class_name Man
 @onready var camera_3d: Camera3D = $Camera3D
 @onready var ap: AnimationPlayer = $"Model/AnimationPlayer"
 @onready var model: Node3D = $Model
+@onready var heel_point: Node3D = $HeelPoint
 
 const ANIM_IDLE: String = "CharacterArmature|CharacterArmature|CharacterArmature|Idle_Hold"
 const ANIM_WALK: String = "CharacterArmature|CharacterArmature|CharacterArmature|Walk_Hold"
@@ -89,7 +90,7 @@ func handle_movement(delta: float) -> void:
 			
 			# Calculate leash pull force based on tension
 			var tension_strength = min(abs(slack) / leash_length, 1.0)
-			var pull_strength = 4000.0  # Adjust this value to control pull force
+			var pull_strength = 2000.0  # Adjust this value to control pull force
 			leash_pull_force = leash_direction * tension_strength * pull_strength
 			
 			if input_dir.length() > 0:
@@ -123,13 +124,12 @@ func handle_movement(delta: float) -> void:
 		# Rotate model to face movement direction
 		if effective_dir.length() > 0:
 			var target_rotation = atan2(effective_dir.x, effective_dir.z)
-			model.rotation.y = lerp_angle(model.rotation.y, target_rotation, 10.0 * delta)
+			rotation.y = lerp_angle(rotation.y, target_rotation, 10.0 * delta)
 	else:
 		# Player is not moving - apply friction but also leash pull
 		var friction_force = Vector3(velocity.x, 0, velocity.z) * -movement_friction
 		var total_force = friction_force + leash_pull_force
 		
-		print(total_force)
 		# Apply the combined forces
 		velocity.x = move_toward(velocity.x, total_force.x * delta, movement_acceleration * delta)
 		velocity.z = move_toward(velocity.z, total_force.z * delta, movement_acceleration * delta)
@@ -137,7 +137,7 @@ func handle_movement(delta: float) -> void:
 		# If being pulled by leash, rotate to face the pull direction
 		if leash_pull_force.length() > 0.1:
 			var pull_rotation = atan2(leash_pull_force.x, leash_pull_force.z)
-			model.rotation.y = lerp_angle(model.rotation.y, pull_rotation, 5.0 * delta)
+			rotation.y = lerp_angle(rotation.y, pull_rotation, 5.0 * delta)
 	
 	# Handle animation based on horizontal movement
 	var horizontal_velocity = Vector3(velocity.x, 0, velocity.z)

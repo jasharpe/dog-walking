@@ -42,4 +42,7 @@ current = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.011322, 1.33994, 0.0814819)
 shape = SubResource("BoxShape3D_gm3yb")
 
+[node name="HeelPoint" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.23721, 0, -1.27498)
+
 [editable path="Model"]

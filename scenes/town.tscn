@@ -1,9 +1,9 @@
-[gd_scene load_steps=10 format=3 uid="uid://bidtk6o77yikx"]
+[gd_scene load_steps=11 format=3 uid="uid://bidtk6o77yikx"]
 
-[ext_resource type="Script" uid="uid://7mfhgbcfbeqb" path="res://scenes/town.gd" id="1_eruj1"]
+[ext_resource type="Script" uid="uid://7mfhgbcfbeqb" path="res://scripts/town.gd" id="1_eruj1"]
 [ext_resource type="PackedScene" uid="uid://4vi78bn6aqli" path="res://scenes/dog.tscn" id="1_f2a5t"]
 [ext_resource type="PackedScene" uid="uid://d2wrlvqlf5vf2" path="res://scenes/man.tscn" id="1_gt07c"]
-[ext_resource type="Script" uid="uid://cbyjdhqsxwh5k" path="res://scenes/leash.gd" id="3_ms2es"]
+[ext_resource type="Script" uid="uid://cbyjdhqsxwh5k" path="res://scripts/leash.gd" id="3_ms2es"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_f2a5t"]
 ground_bottom_color = Color(0.2, 0.403922, 0.133333, 1)
@@ -18,7 +18,11 @@ sky = SubResource("Sky_ms2es")
 [sub_resource type="BoxShape3D" id="BoxShape3D_eruj1"]
 size = Vector3(50, 1, 50)
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eruj1"]
+albedo_color = Color(0.209982, 0.52857, 0, 1)
+
 [sub_resource type="PlaneMesh" id="PlaneMesh_eruj1"]
+material = SubResource("StandardMaterial3D_eruj1")
 size = Vector2(50, 50)
 
 [node name="Town" type="Node3D"]
