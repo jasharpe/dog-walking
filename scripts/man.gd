@@ -1,10 +1,8 @@
-# TODO: Convert this to CharacterBody3D
-extends Node3D
+extends CharacterBody3D
 class_name Man
 
 @export var dog: Dog
 @export var leash_length: float
-
 @onready var hand: BoneAttachment3D = $Model/RootNode/CharacterArmature/Skeleton3D/Hand
 @onready var camera_3d: Camera3D = $Camera3D
 @onready var ap: AnimationPlayer = $"Model/AnimationPlayer"
@@ -24,11 +22,27 @@ var is_rotating_camera: bool = false
 var movement_speed: float = 5.0
 var movement_acceleration: float = 20.0
 var movement_friction: float = 20.0
-var current_velocity: Vector3 = Vector3.ZERO
 
-func _process(delta: float) -> void:
+# CharacterBody3D physics parameters
+var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+var jump_velocity: float = 4.5
+
+func _physics_process(delta: float) -> void:
 	handle_movement(delta)
+	handle_physics(delta)
 	update_camera()
+
+func handle_physics(delta: float) -> void:
+	# Add gravity
+	if not is_on_floor():
+		velocity.y -= gravity * delta
+	
+	# Handle jump (optional - remove if not needed)
+	if Input.is_action_just_pressed("ui_accept") and is_on_floor():
+		velocity.y = jump_velocity
+	
+	# Move the character body
+	move_and_slide()
 
 func handle_movement(delta: float) -> void:
 	# Get input
@@ -56,26 +70,24 @@ func handle_movement(delta: float) -> void:
 	# Calculate movement direction relative to camera
 	var movement_dir = (camera_right * input_dir.x + camera_forward * -input_dir.z).normalized()
 	
-	# TODO: Calculate effective_dir using direction of dog and its global distance relative to the
-	# leash_length. The man is stronger so he will overcome, but his top speed should be reduced
-	# smoothly from 1 (with any amount of slack) down to 0.5 (with negative slack against his
-	# direction), or up to 1.5 with 
-	
-	# Apply movement with acceleration/friction
+	# Apply movement with acceleration/friction to horizontal velocity
 	if input_dir.length() > 0:
-		current_velocity = current_velocity.move_toward(movement_dir * movement_speed, movement_acceleration * delta)
+		var target_velocity = movement_dir * movement_speed
+		velocity.x = move_toward(velocity.x, target_velocity.x, movement_acceleration * delta)
+		velocity.z = move_toward(velocity.z, target_velocity.z, movement_acceleration * delta)
 		
 		# Rotate model to face movement direction
 		if movement_dir.length() > 0:
 			var target_rotation = atan2(movement_dir.x, movement_dir.z)
 			model.rotation.y = lerp_angle(model.rotation.y, target_rotation, 10.0 * delta)
 	else:
-		current_velocity = current_velocity.move_toward(Vector3.ZERO, 3 * movement_friction * delta)
+		# Apply friction when no input
+		velocity.x = move_toward(velocity.x, 0.0, movement_friction * delta)
+		velocity.z = move_toward(velocity.z, 0.0, movement_friction * delta)
 	
-	# Apply movement
-	model.global_transform.origin += current_velocity * delta
-	
-	handle_animation(current_velocity)
+	# Handle animation based on horizontal movement
+	var horizontal_velocity = Vector3(velocity.x, 0, velocity.z)
+	handle_animation(horizontal_velocity)
 
 func update_camera() -> void:
 	var zoom: float = 2
@@ -84,8 +96,9 @@ func update_camera() -> void:
 		-orbit_distance * sin(orbit_pitch),
 		orbit_distance * cos(orbit_pitch) * cos(orbit_yaw)
 	)
-	camera_3d.global_transform.origin = model.global_transform.origin + zoom * offset
-	camera_3d.look_at(model.global_transform.origin + Vector3(0, 1, 0), Vector3.UP)
+	# Use CharacterBody3D's global_position instead of model's transform
+	camera_3d.global_transform.origin = global_position + zoom * offset
+	camera_3d.look_at(global_position + Vector3(0, 1, 0), Vector3.UP)
 
 func handle_animation(current_velocity: Vector3) -> void:
 	var anim = ANIM_IDLE

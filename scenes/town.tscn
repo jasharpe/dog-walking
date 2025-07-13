@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://bidtk6o77yikx"]
+[gd_scene load_steps=10 format=3 uid="uid://bidtk6o77yikx"]
 
 [ext_resource type="Script" uid="uid://7mfhgbcfbeqb" path="res://scenes/town.gd" id="1_eruj1"]
 [ext_resource type="PackedScene" uid="uid://4vi78bn6aqli" path="res://scenes/dog.tscn" id="1_f2a5t"]
@@ -14,6 +14,12 @@ sky_material = SubResource("ProceduralSkyMaterial_f2a5t")
 [sub_resource type="Environment" id="Environment_f2a5t"]
 background_mode = 2
 sky = SubResource("Sky_ms2es")
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_eruj1"]
+size = Vector3(50, 1, 50)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_eruj1"]
+size = Vector2(50, 50)
 
 [node name="Town" type="Node3D"]
 script = ExtResource("1_eruj1")
@@ -33,3 +39,13 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0, 3)
 [node name="Leash" type="Node3D" parent="."]
 script = ExtResource("3_ms2es")
 leash_length = 5.0
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+shape = SubResource("BoxShape3D_eruj1")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D"]
+mesh = SubResource("PlaneMesh_eruj1")
+skeleton = NodePath("../..")
