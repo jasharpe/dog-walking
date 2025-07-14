@@ -1,6 +1,8 @@
 extends CharacterBody3D
 class_name Man
 
+signal bush_checked
+
 @export var dog: Dog
 @export var leash_length: float
 @onready var hand: BoneAttachment3D = $Model/RootNode/CharacterArmature/Skeleton3D/Hand
@@ -8,10 +10,12 @@ class_name Man
 @onready var ap: AnimationPlayer = $"Model/AnimationPlayer"
 @onready var model: Node3D = $Model
 @onready var heel_point: Node3D = $HeelPoint
+@onready var interact_radius: Area3D = $InteractRadius
 
 const ANIM_IDLE: String = "CharacterArmature|CharacterArmature|CharacterArmature|Idle_Hold"
 const ANIM_WALK: String = "CharacterArmature|CharacterArmature|CharacterArmature|Walk_Hold"
 const ANIM_RUN: String = "CharacterArmature|CharacterArmature|CharacterArmature|Run_Hold"
+const ANIM_PUNCH: String = "CharacterArmature|CharacterArmature|CharacterArmature|Punch"
 
 # Camera orbit parameters
 var orbit_distance: float = 5.0
@@ -30,24 +34,49 @@ var movement_friction: float = 20.0
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var jump_velocity: float = 4.5
 
+var bush: Bush
+
+enum State {
+	WALKING,
+	CHECKING,
+}
+
+var state: State = State.WALKING
+
 func _physics_process(delta: float) -> void:
-	handle_movement(delta)
-	handle_physics(delta)
+	if state != State.CHECKING:
+		if bush and not bush in interact_radius.get_overlapping_bodies():
+			bush.hide_interact()
+			bush = null
+		for body in interact_radius.get_overlapping_bodies():
+			var parent := body.get_parent()
+			if parent is Bush and parent.highlighted:
+				bush = parent
+				break
+		if bush:
+			bush.show_interact()
+	
+	if bush and Input.is_action_just_pressed("Check"):
+		check()
+	
+	match state:
+		State.WALKING:
+			handle_walking(delta)
+			handle_physics(delta)
+	
 	update_camera()
 
-func handle_physics(delta: float) -> void:
-	# Add gravity
-	if not is_on_floor():
-		velocity.y -= gravity * delta
-	
-	# Handle jump (optional - remove if not needed)
-	if Input.is_action_just_pressed("ui_accept") and is_on_floor():
-		velocity.y = jump_velocity
-	
-	# Move the character body
-	move_and_slide()
+func check() -> void:
+	state = State.CHECKING
+	ap.play(ANIM_PUNCH, 0.5)
+	await ap.animation_finished
+	bush.interesting = false
+	bush.hide_interact()
+	bush = null
+	state = State.WALKING
+	bush_checked.emit()
 
-func handle_movement(delta: float) -> void:
+func handle_walking(delta: float) -> void:
 	# Get input
 	var input_dir = Vector3.ZERO
 	
@@ -149,7 +178,19 @@ func handle_movement(delta: float) -> void:
 	
 	# Handle animation based on horizontal movement and running state
 	var horizontal_velocity = Vector3(velocity.x, 0, velocity.z)
-	handle_animation(horizontal_velocity, is_running)
+	handle_walking_animation(horizontal_velocity, is_running)
+
+func handle_physics(delta: float) -> void:
+	# Add gravity
+	if not is_on_floor():
+		velocity.y -= gravity * delta
+	
+	# Handle jump (optional - remove if not needed)
+	if Input.is_action_just_pressed("ui_accept") and is_on_floor():
+		velocity.y = jump_velocity
+	
+	# Move the character body
+	move_and_slide()
 
 func update_camera() -> void:
 	var zoom: float = 2
@@ -162,8 +203,8 @@ func update_camera() -> void:
 	camera_3d.global_transform.origin = global_position + zoom * offset
 	camera_3d.look_at(global_position + Vector3(0, 1, 0), Vector3.UP)
 
-func handle_animation(current_velocity: Vector3, is_running: bool) -> void:
-	var anim = ANIM_IDLE
+func handle_walking_animation(current_velocity: Vector3, is_running: bool) -> void:
+	var anim := ANIM_IDLE
 	if current_velocity.length() > 0.05:
 		if is_running:
 			anim = ANIM_RUN

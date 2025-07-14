@@ -1,10 +1,12 @@
-[gd_scene load_steps=8 format=4 uid="uid://bfyab2x6pnnf8"]
+[gd_scene load_steps=10 format=4 uid="uid://bfyab2x6pnnf8"]
 
 [ext_resource type="Script" uid="uid://bprkbovmm8r3" path="res://scripts/bush.gd" id="1_ehqem"]
 [ext_resource type="PackedScene" uid="uid://cho8w04dv6bke" path="res://models/Bush.glb" id="1_lad4k"]
 [ext_resource type="Texture2D" uid="uid://cm1gvqxp4kd0j" path="res://models/Bush_Atlas.png" id="3_tu87o"]
+[ext_resource type="FontFile" uid="uid://cm6muublb23cc" path="res://fonts/TerminalDosis-SemiBold.ttf" id="4_6ftm5"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6ftm5"]
+resource_local_to_scene = true
 resource_name = "Atlas"
 albedo_color = Color(0.713726, 0.905882, 0.321569, 1)
 albedo_texture = ExtResource("3_tu87o")
@@ -34,6 +36,7 @@ _surfaces = [{
 blend_shape_mode = 0
 
 [sub_resource type="ArrayMesh" id="ArrayMesh_jpk7d"]
+resource_local_to_scene = true
 resource_name = "Root Scene_Bush"
 _surfaces = [{
 "aabb": AABB(-0.0154283, -0.000404702, -0.0154283, 0.0308566, 0.0196006, 0.0308566),
@@ -55,6 +58,10 @@ shadow_mesh = SubResource("ArrayMesh_pv73v")
 [sub_resource type="SphereShape3D" id="SphereShape3D_ehqem"]
 radius = 1.563
 
+[sub_resource type="FontVariation" id="FontVariation_jpk7d"]
+fallbacks = Array[Font]([null])
+base_font = ExtResource("4_6ftm5")
+
 [node name="Bush" type="Node3D"]
 script = ExtResource("1_ehqem")
 
@@ -68,5 +75,13 @@ mesh = SubResource("ArrayMesh_jpk7d")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.712344, 0)
 shape = SubResource("SphereShape3D_ehqem")
+
+[node name="Interact" type="Label3D" parent="."]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 3.71325, 0)
+modulate = Color(1, 1, 1, 0)
+outline_modulate = Color(0, 0, 0, 0)
+text = "Check (E)"
+font = SubResource("FontVariation_jpk7d")
+font_size = 80
 
 [editable path="Root Scene"]

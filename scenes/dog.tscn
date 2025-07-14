@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=4 uid="uid://4vi78bn6aqli"]
+[gd_scene load_steps=10 format=4 uid="uid://4vi78bn6aqli"]
 
 [ext_resource type="PackedScene" uid="uid://dtqg8yq38u5am" path="res://models/Dog.glb" id="1_on80e"]
 [ext_resource type="Script" uid="uid://blhu40fawafof" path="res://scripts/dog.gd" id="1_vwjdu"]
@@ -44,6 +44,9 @@ blend_shape_mode = 0
 fallbacks = Array[Font]([null])
 base_font = ExtResource("3_qjqk5")
 
+[sub_resource type="SphereShape3D" id="SphereShape3D_gmowd"]
+radius = 4.712
+
 [node name="Dog" type="CharacterBody3D"]
 script = ExtResource("1_vwjdu")
 
@@ -75,9 +78,14 @@ transform = Transform3D(1, 1.0842e-19, 3.55271e-14, -2.71051e-19, 1, -1.42109e-1
 
 [node name="Alert" type="Label3D" parent="."]
 transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 3, 0)
-visible = false
+modulate = Color(1, 1, 1, 0)
 text = "!!!"
 font = SubResource("FontVariation_gmowd")
 font_size = 128
+
+[node name="SmellRadius" type="Area3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="SmellRadius"]
+shape = SubResource("SphereShape3D_gmowd")
 
 [editable path="Model"]

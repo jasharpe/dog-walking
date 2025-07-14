@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3 uid="uid://f3o2pmxehxsr"]
+
+[ext_resource type="Theme" uid="uid://cf0prtu0k8bfo" path="res://themes/ui.tres" id="1_0jo4f"]
+[ext_resource type="Script" uid="uid://boftj163wpxy0" path="res://scripts/objective_label.gd" id="2_h4e5n"]
+
+[node name="Objective" type="RichTextLabel"]
+theme = ExtResource("1_0jo4f")
+bbcode_enabled = true
+text = "☐ Check 3 Bushes (0/3)"
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+script = ExtResource("2_h4e5n")

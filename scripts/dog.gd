@@ -7,6 +7,7 @@ class_name Dog
 @onready var ap: AnimationPlayer = $"Model/AnimationPlayer"
 @onready var model: Node3D = $Model
 @onready var alert: Label3D = $Alert
+@onready var smell_radius: Area3D = $SmellRadius
 
 var ANIM_IDLE: String = "AnimalArmature|AnimalArmature|AnimalArmature|Idle"
 var ANIM_WALK: String = "AnimalArmature|AnimalArmature|AnimalArmature|Walk"
@@ -49,19 +50,42 @@ func _ready() -> void:
 	if man:
 		man_previous_position = man.global_position
 
+var bush_of_interest: Bush
+
 func _physics_process(delta: float) -> void:
-	var camera = get_viewport().get_camera_3d()
-	if camera:
-		alert.look_at(camera.global_position, Vector3.UP)
-		alert.rotation.x = 0
-		alert.rotation.z = 0
+	var bodies := smell_radius.get_overlapping_bodies()
+	if bush_of_interest and bush_of_interest.interesting and bush_of_interest in bodies.map(func(body): return body.get_parent()):
+		pass
+	else:
+		if bush_of_interest:
+			bush_of_interest.unhighlight()
+			bush_of_interest = null
+		for body in bodies:
+			var parent := body.get_parent()
+			if parent is Bush and parent.interesting:
+				bush_of_interest = parent
+				parent.highlight()
+				break
+	
+	if bush_of_interest:
+		alert.modulate.a = 1
+		alert.outline_modulate.a = 1
+	else:
+		alert.modulate.a = 0
+		alert.outline_modulate.a = 0
 	
 	track_man_movement(delta)
-	determine_behavior_state()
+	determine_behavior_state(bush_of_interest)
 	handle_movement(delta)
 	handle_gravity(delta)
 	handle_animation()
 	move_and_slide()
+	
+	var camera = get_viewport().get_camera_3d()
+	if camera:
+		alert.look_at(camera.global_position, Vector3.UP, true)
+		alert.rotation.x = 0
+		alert.rotation.z = 0
 
 func track_man_movement(delta: float) -> void:
 	if man == null:
@@ -70,7 +94,7 @@ func track_man_movement(delta: float) -> void:
 	man_velocity = (man.global_position - man_previous_position) / delta
 	man_previous_position = man.global_position
 
-func determine_behavior_state() -> void:
+func determine_behavior_state(bush_of_interest: Bush) -> void:
 	if man == null:
 		is_heeling = false
 		return

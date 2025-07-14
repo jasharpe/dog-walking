@@ -1,0 +1,13 @@
+[gd_resource type="Theme" load_steps=2 format=3 uid="uid://cf0prtu0k8bfo"]
+
+[ext_resource type="FontFile" uid="uid://cm6muublb23cc" path="res://fonts/TerminalDosis-SemiBold.ttf" id="1_k5lm2"]
+
+[resource]
+default_font_size = 100
+Label/fonts/font = ExtResource("1_k5lm2")
+MarginContainer/constants/margin_bottom = 50
+MarginContainer/constants/margin_left = 50
+MarginContainer/constants/margin_right = 50
+MarginContainer/constants/margin_top = 50
+RichTextLabel/font_sizes/normal_font_size = 80
+RichTextLabel/fonts/normal_font = ExtResource("1_k5lm2")
