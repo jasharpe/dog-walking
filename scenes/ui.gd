@@ -5,8 +5,6 @@ var objective_scene: Resource = load("res://scenes/objective_label.tscn")
 @onready var town: Node3D = $Town
 @onready var objective_list: VBoxContainer = $MarginContainer/ObjectiveList
 
-var objs_to_labels: Dictionary[Objective, ObjectiveLabel] = {}
-
 func _ready() -> void:
 	for objective in town.objectives:
 		var objective_label := objective_scene.instantiate() as ObjectiveLabel
