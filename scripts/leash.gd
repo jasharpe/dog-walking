@@ -1,364 +1,294 @@
 extends Node3D
 class_name Leash
 
-@export var man: Node3D
 @export var hand: Node3D
 @export var neck: Node3D
 @export var leash_length: float = 2.0
 @export var rope_radius: float = 0.02
 @export var segments: int = 20
-@export var man_radius: float = 0.5  # Approximate radius of the man's collision cylinder
-@export var wrap_height_offset: float = 0.3  # How much to offset wrap points vertically
-@export var wrap_detail_multiplier: float = 2.0  # How much extra detail to give wrap segments
 
-var rope_mesh: MeshInstance3D
+# Physics properties
+@export_group("Physics")
+@export var segment_mass: float = 0.1
+@export var linear_damping: float = 0.8
+@export var angular_damping: float = 1.0
+@export var joint_stiffness: float = 100.0
+@export var joint_damping: float = 10.0
+
+# Visual properties
+@export_group("Visual")
+@export var rope_material: Material
+@export var smoothing_iterations: int = 3
+
+# Internal references
+var segment_bodies: Array[RigidBody3D] = []
+var joints: Array[Generic6DOFJoint3D] = []
+var visual_path: Path3D
+var path_follow: PathFollow3D
+var mesh_instance: MeshInstance3D
 
 func _ready():
-	rope_mesh = MeshInstance3D.new()
-	add_child(rope_mesh)
+	# Wait for parent to be ready (so hand/neck references are set)
+	await get_parent().ready
 	
-	# Create a simple material for the rope
-	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(0.6, 0.4, 0.2)  # Brown leather color
-	rope_mesh.material_override = material
+	if not hand or not neck:
+		push_error("Leash requires both hand and neck nodes to be set")
+		return
+	
+	# Ensure we're in the tree before accessing global positions
+	if not is_inside_tree():
+		await tree_entered
+	
+	setup_rope_segments()
+	setup_visual_representation()
 
-func _process(_delta):
-	if hand and neck and man:
-		update_leash()
-
-func update_leash():
+func setup_rope_segments():
+	var segment_length = leash_length / float(segments)
 	var start_pos = hand.global_position
 	var end_pos = neck.global_position
+	var direction = (end_pos - start_pos).normalized()
 	
-	# Check if the direct line intersects with the man
-	var path_points = calculate_leash_path(start_pos, end_pos)
+	# Create segments
+	for i in segments:
+		var segment = create_segment(i, segment_length)
+		
+		# Add to scene tree first
+		add_child(segment)
+		segment_bodies.append(segment)
+		
+		# Now we can safely set global position
+		var t = float(i) / float(segments - 1)
+		segment.global_position = start_pos.lerp(end_pos, t)
 	
-	# Debug: Print path points
-	if path_points.size() < 2:
-		print("Error: Not enough path points: ", path_points.size())
-		return
+	# Create joints between segments
+	for i in segments - 1:
+		var joint = create_joint(segment_bodies[i], segment_bodies[i + 1])
+		add_child(joint)
+		joints.append(joint)
 	
-	# Generate curve points with sag
-	var points = generate_rope_points_with_path(path_points)
-	
-	# Debug: Check if we have enough points
-	if points.size() < 2:
-		print("Error: Not enough rope points: ", points.size())
-		return
-	
-	# Create mesh from points
-	var mesh = create_rope_mesh(points)
-	if mesh == null:
-		print("Error: Failed to create mesh")
-		return
-	
-	rope_mesh.mesh = mesh
+	# Attach ends to hand and neck
+	attach_to_bone(segment_bodies[0], hand, true)
+	attach_to_bone(segment_bodies[-1], neck, false)
 
-func calculate_leash_path(start: Vector3, end: Vector3) -> Array[Vector3]:
-	var path: Array[Vector3] = []
-	path.append(start)
+func create_segment(index: int, length: float) -> RigidBody3D:
+	var segment = RigidBody3D.new()
+	segment.name = "LeashSegment" + str(index)
+	segment.mass = segment_mass
+	segment.linear_damp = linear_damping
+	segment.angular_damp = angular_damping
+	segment.continuous_cd = true  # Prevent tunneling
 	
-	# Check if direct line collides with man
-	if does_line_intersect_cylinder(start, end, man.global_position, man_radius):
-		# Calculate wrap points around the man
-		var wrap_points = calculate_wrap_points(start, end, man.global_position, man_radius)
-		path.append_array(wrap_points)
+	# Add collision shape
+	var collision = CollisionShape3D.new()
+	var capsule = CapsuleShape3D.new()
+	capsule.radius = rope_radius
+	capsule.height = length
+	collision.shape = capsule
+	segment.add_child(collision)
 	
-	path.append(end)
-	return path
+	# Set collision layers (adjust as needed)
+	segment.collision_layer = 4  # Leash layer
+	segment.collision_mask = 1 | 2  # Collide with environment and characters
+	
+	return segment
 
-func does_line_intersect_cylinder(start: Vector3, end: Vector3, cylinder_center: Vector3, cylinder_radius: float) -> bool:
-	# Convert to 2D problem (ignore Y for cylinder collision)
-	var start_2d = Vector2(start.x, start.z)
-	var end_2d = Vector2(end.x, end.z)
-	var center_2d = Vector2(cylinder_center.x, cylinder_center.z)
+func create_joint(body_a: RigidBody3D, body_b: RigidBody3D) -> Generic6DOFJoint3D:
+	var joint = Generic6DOFJoint3D.new()
+	joint.node_a = body_a.get_path()
+	joint.node_b = body_b.get_path()
 	
-	# Calculate distance from cylinder center to line segment
-	var line_vec = end_2d - start_2d
-	var line_length = line_vec.length()
+	# Configure joint limits and spring properties
+	# Allow some movement but keep segments connected
+	for axis in ["x", "y", "z"]:
+		# Linear limits - small amount of stretch
+		joint.set("linear_limit_" + axis + "/enabled", true)
+		joint.set("linear_limit_" + axis + "/upper_distance", 0.05)
+		joint.set("linear_limit_" + axis + "/lower_distance", -0.05)
+		joint.set("linear_limit_" + axis + "/softness", 0.5)
+		
+		# Angular limits - prevent excessive rotation
+		joint.set("angular_limit_" + axis + "/enabled", true)
+		joint.set("angular_limit_" + axis + "/upper_angle", deg_to_rad(45))
+		joint.set("angular_limit_" + axis + "/lower_angle", deg_to_rad(-45))
+		
+		# Spring properties for natural movement
+		joint.set("linear_spring_" + axis + "/enabled", true)
+		joint.set("linear_spring_" + axis + "/stiffness", joint_stiffness)
+		joint.set("linear_spring_" + axis + "/damping", joint_damping)
 	
-	if line_length == 0:
-		return start_2d.distance_to(center_2d) < cylinder_radius
-	
-	var line_dir = line_vec / line_length
-	var to_center = center_2d - start_2d
-	
-	# Project center onto line
-	var projection = to_center.dot(line_dir)
-	projection = clamp(projection, 0, line_length)
-	
-	var closest_point = start_2d + line_dir * projection
-	var distance_to_line = closest_point.distance_to(center_2d)
-	
-	return distance_to_line < cylinder_radius
+	return joint
 
-func calculate_wrap_points(start: Vector3, end: Vector3, center: Vector3, radius: float) -> Array[Vector3]:
-	var wrap_points: Array[Vector3] = []
-	
-	# Work in 2D for wrapping calculation
-	var start_2d = Vector2(start.x, start.z)
-	var end_2d = Vector2(end.x, end.z)
-	var center_2d = Vector2(center.x, center.z)
-	
-	# Calculate tangent points from start and end to the circle
-	var start_tangents = get_tangent_points(start_2d, center_2d, radius)
-	var end_tangents = get_tangent_points(end_2d, center_2d, radius)
-	
-	# Determine which tangent points to use based on which side of the man they're on
-	var start_to_center = center_2d - start_2d
-	var end_to_center = center_2d - end_2d
-	
-	# Use cross product to determine which tangent points create the shorter wrap
-	var cross_product = start_to_center.x * end_to_center.y - start_to_center.y * end_to_center.x
-	
-	var start_tangent: Vector2
-	var end_tangent: Vector2
-	
-	if cross_product > 0:
-		# Counter-clockwise wrapping
-		start_tangent = start_tangents[0]  # Right tangent from start
-		end_tangent = end_tangents[1]     # Left tangent to end
+func attach_to_bone(segment: RigidBody3D, bone: Node3D, is_hand: bool):
+	# Store reference for manual position updates
+	if is_hand:
+		segment.set_meta("attached_to_hand", true)
 	else:
-		# Clockwise wrapping
-		start_tangent = start_tangents[1]  # Left tangent from start
-		end_tangent = end_tangents[0]     # Right tangent to end
+		segment.set_meta("attached_to_neck", true)
 	
-	# Calculate smooth height interpolation for wrap points
-	# Use 1/3 and 2/3 positions along the straight line for height reference
-	var height_at_first_wrap = lerp(start.y, end.y, 0.33)
-	var height_at_second_wrap = lerp(start.y, end.y, 0.67)
-	
-	# Apply a small upward offset for more natural appearance
-	height_at_first_wrap += wrap_height_offset
-	height_at_second_wrap += wrap_height_offset
-	
-	# Convert back to 3D and add wrap points
-	wrap_points.append(Vector3(start_tangent.x, height_at_first_wrap, start_tangent.y))
-	wrap_points.append(Vector3(end_tangent.x, height_at_second_wrap, end_tangent.y))
-	
-	return wrap_points
+	# Make the end segments kinematic so we can control them directly
+	segment.freeze = true
+	segment.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 
-func get_tangent_points(point: Vector2, center: Vector2, radius: float) -> Array[Vector2]:
-	var tangents: Array[Vector2] = []
+func setup_visual_representation():
+	# Create path for smooth visuals
+	visual_path = Path3D.new()
+	visual_path.curve = Curve3D.new()
+	add_child(visual_path)
 	
-	var to_point = point - center
-	var distance = to_point.length()
-	
-	if distance <= radius:
-		# Point is inside circle, return the point itself
-		tangents.append(point)
-		tangents.append(point)
-		return tangents
-	
-	# Calculate tangent length
-	var tangent_length = sqrt(distance * distance - radius * radius)
-	
-	# Normalize vector to point
-	var to_point_normalized = to_point / distance
-	
-	# Calculate angle to tangent points
-	var angle = acos(radius / distance)
-	
-	# Calculate the two tangent points
-	var angle1 = atan2(to_point_normalized.y, to_point_normalized.x) + angle
-	var angle2 = atan2(to_point_normalized.y, to_point_normalized.x) - angle
-	
-	tangents.append(center + Vector2(cos(angle1), sin(angle1)) * radius)
-	tangents.append(center + Vector2(cos(angle2), sin(angle2)) * radius)
-	
-	return tangents
+	# Create mesh instance for the rope
+	mesh_instance = MeshInstance3D.new()
+	if rope_material:
+		mesh_instance.material_override = rope_material
+	add_child(mesh_instance)
 
-func generate_rope_points_with_path(path_points: Array[Vector3]) -> Array[Vector3]:
-	var all_points: Array[Vector3] = []
+func _physics_process(_delta):
+	# Update end segment positions to follow hand and neck
+	if segment_bodies.size() > 0:
+		if hand and segment_bodies[0].has_meta("attached_to_hand"):
+			segment_bodies[0].global_position = hand.global_position
+		if neck and segment_bodies[-1].has_meta("attached_to_neck"):
+			segment_bodies[-1].global_position = neck.global_position
 	
-	# Safety check
-	if path_points.size() < 2:
-		print("Error: Path points too few: ", path_points.size())
-		return all_points
+	update_visual_representation()
 	
-	# If only 2 points (no wrapping), use the original simple generation
-	if path_points.size() == 2:
-		var start = path_points[0]
-		var end = path_points[1]
-		var sag_amount = calculate_sag_amount(start, end)
-		return generate_rope_points(start, end, sag_amount)
-	
-	# Calculate segment lengths and total path length
-	var segment_lengths: Array[float] = []
-	var total_length = 0.0
-	
-	for i in range(path_points.size() - 1):
-		var length = path_points[i].distance_to(path_points[i + 1])
-		segment_lengths.append(length)
-		total_length += length
-	
-	# Calculate sag amount based on total path length
-	var total_sag = calculate_sag_amount_for_path(path_points, total_length)
-	
-	# Generate points for each segment with smooth height interpolation
-	var cumulative_distance = 0.0
-	
-	for i in range(path_points.size() - 1):
-		var start = path_points[i]
-		var end = path_points[i + 1]
-		var segment_length = segment_lengths[i]
-		
-		# Determine segment count based on whether this is a wrap segment or not
-		var segment_count: int
-		if path_points.size() > 2 and i > 0 and i < path_points.size() - 2:
-			# This is a wrap segment (middle segments) - give it more detail
-			segment_count = max(8, int(segments * 0.4 * wrap_detail_multiplier))
-		else:
-			# This is a regular segment (first or last) - normal detail
-			var length_ratio = segment_length / total_length
-			segment_count = max(4, int(segments * length_ratio))
-		
-		# Generate points for this segment
-		for j in range(segment_count + 1):
-			if i > 0 and j == 0:
-				continue  # Skip first point of non-first segments to avoid duplication
-			
-			var t = float(j) / float(segment_count)
-			var point = start.lerp(end, t)
-			
-			# Calculate smooth height interpolation across entire path
-			var segment_distance = t * segment_length
-			var global_t = (cumulative_distance + segment_distance) / total_length
-			
-			# Create smooth height transition from start to end
-			var start_height = path_points[0].y
-			var end_height = path_points[path_points.size() - 1].y
-			var target_height = lerp(start_height, end_height, global_t)
-			
-			# Apply sag based on global position along entire path
-			var sag_factor = 4.0 * global_t * (1.0 - global_t)  # Parabolic curve
-			var final_height = target_height - total_sag * sag_factor
-			
-			# Set the final height
-			point.y = final_height
-			
-			all_points.append(point)
-		
-		cumulative_distance += segment_length
-	
-	return all_points
+	# Optional: Apply additional forces for better behavior
+	apply_tension_forces()
 
-func calculate_sag_amount_for_path(path_points: Array[Vector3], total_path_length: float) -> float:
-	# Calculate sag based on the straight-line distance vs path length
-	var straight_distance = path_points[0].distance_to(path_points[path_points.size() - 1])
-	var excess_length = total_path_length - straight_distance
+func update_visual_representation():
+	if not visual_path or not visual_path.curve:
+		return
 	
-	# Base sag calculation
-	var base_sag = max(0, (leash_length - straight_distance) * 0.3)
+	var curve = visual_path.curve
+	curve.clear_points()
 	
-	# Additional sag for wrapped paths (since they're longer)
-	var wrap_sag = excess_length * 0.1
-	
-	return base_sag + wrap_sag
-
-func generate_rope_points(start: Vector3, end: Vector3, sag: float) -> Array[Vector3]:
+	# Get segment positions
 	var points: Array[Vector3] = []
+	for segment in segment_bodies:
+		points.append(segment.global_position)
 	
-	for i in range(segments + 1):
-		var t = float(i) / float(segments)
-		
-		# Linear interpolation between start and end
-		var point = start.lerp(end, t)
-		
-		# Add parabolic sag (downward curve)
-		var sag_factor = 4.0 * t * (1.0 - t)  # Parabolic curve (peaks at t=0.5)
-		point.y -= sag * sag_factor
-		point.y = max(0, point.y)
-		
-		points.append(point)
+	# Smooth the points
+	var smoothed_points = smooth_points(points, smoothing_iterations)
 	
-	return points
+	# Add points to curve
+	for point in smoothed_points:
+		curve.add_point(visual_path.to_local(point))
+	
+	# Generate rope mesh
+	generate_rope_mesh(curve)
 
-func calculate_sag_amount(start: Vector3, end: Vector3) -> float:
-	var distance = start.distance_to(end)
-	return max(0, (leash_length - distance) * 0.3)
+func smooth_points(points: Array[Vector3], iterations: int) -> Array[Vector3]:
+	var result = points.duplicate()
+	
+	for _i in iterations:
+		var new_points: Array[Vector3] = []
+		new_points.append(result[0])  # Keep first point fixed
+		
+		for j in range(1, result.size() - 1):
+			# Average with neighbors
+			var smoothed = (result[j-1] + result[j] * 2.0 + result[j+1]) / 4.0
+			new_points.append(smoothed)
+		
+		new_points.append(result[-1])  # Keep last point fixed
+		result = new_points
+	
+	return result
 
-func create_rope_mesh(points: Array[Vector3]) -> ArrayMesh:
-	# Safety checks
-	if points.size() < 2:
-		print("Error: Not enough points for mesh: ", points.size())
-		return null
+func generate_rope_mesh(curve: Curve3D):
+	if curve.point_count < 2:
+		return
 	
 	var arrays = []
 	arrays.resize(Mesh.ARRAY_MAX)
 	
-	var vertices: PackedVector3Array = []
-	var normals: PackedVector3Array = []
-	var uvs: PackedVector2Array = []
-	var indices: PackedInt32Array = []
+	var vertices = PackedVector3Array()
+	var normals = PackedVector3Array()
+	var uvs = PackedVector2Array()
+	var indices = PackedInt32Array()
 	
-	# Create vertices around each point
 	var radial_segments = 8
+	var length_accumulated = 0.0
 	
-	for i in range(points.size()):
-		var point = points[i]
+	# Generate vertices along the curve
+	for i in curve.point_count:
+		var point = curve.get_point_position(i)
+		var tangent: Vector3
 		
-		# Get direction for this segment
-		var direction: Vector3
 		if i == 0:
-			if points.size() > 1:
-				direction = (points[1] - points[0]).normalized()
-			else:
-				direction = Vector3.FORWARD
-		elif i == points.size() - 1:
-			direction = (points[i] - points[i-1]).normalized()
+			tangent = (curve.get_point_position(1) - point).normalized()
+		elif i == curve.point_count - 1:
+			tangent = (point - curve.get_point_position(i-1)).normalized()
 		else:
-			direction = (points[i+1] - points[i-1]).normalized()
-		
-		# Ensure direction is not zero
-		if direction.length() < 0.001:
-			direction = Vector3.FORWARD
+			tangent = (curve.get_point_position(i+1) - curve.get_point_position(i-1)).normalized()
 		
 		# Create perpendicular vectors
-		var up = Vector3.UP
-		if abs(direction.dot(up)) > 0.9:
-			up = Vector3.RIGHT
+		var right = tangent.cross(Vector3.UP).normalized()
+		if right.length() < 0.01:
+			right = tangent.cross(Vector3.RIGHT).normalized()
+		var up = right.cross(tangent).normalized()
 		
-		var right = direction.cross(up).normalized()
-		up = right.cross(direction).normalized()
-		
-		# Create circle of vertices around this point
-		for j in range(radial_segments):
-			var angle = j * TAU / radial_segments
+		# Add vertices in a circle
+		for j in radial_segments:
+			var angle = (j / float(radial_segments)) * TAU
 			var offset = (right * cos(angle) + up * sin(angle)) * rope_radius
-			
 			vertices.append(point + offset)
 			normals.append(offset.normalized())
-			uvs.append(Vector2(float(j) / radial_segments, float(i) / points.size()))
+			uvs.append(Vector2(j / float(radial_segments), length_accumulated))
+		
+		if i > 0:
+			length_accumulated += (point - curve.get_point_position(i-1)).length()
 	
-	# Create indices for triangles
-	for i in range(points.size() - 1):
-		for j in range(radial_segments):
+	# Generate indices
+	for i in curve.point_count - 1:
+		for j in radial_segments:
 			var current = i * radial_segments + j
-			var next = i * radial_segments + ((j + 1) % radial_segments)
-			var current_next_row = (i + 1) * radial_segments + j
-			var next_next_row = (i + 1) * radial_segments + ((j + 1) % radial_segments)
+			var next = i * radial_segments + (j + 1) % radial_segments
+			var current_next = (i + 1) * radial_segments + j
+			var next_next = (i + 1) * radial_segments + (j + 1) % radial_segments
 			
 			# First triangle
 			indices.append(current)
 			indices.append(next)
-			indices.append(current_next_row)
+			indices.append(next_next)
 			
 			# Second triangle
-			indices.append(next)
-			indices.append(next_next_row)
-			indices.append(current_next_row)
-	
-	# Safety check for arrays
-	if vertices.size() == 0 or indices.size() == 0:
-		print("Error: Empty mesh arrays - vertices: ", vertices.size(), " indices: ", indices.size())
-		return null
+			indices.append(current)
+			indices.append(next_next)
+			indices.append(current_next)
 	
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
 	
-	var mesh = ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	return mesh
+	var array_mesh = ArrayMesh.new()
+	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh_instance.mesh = array_mesh
+
+func apply_tension_forces():
+	# Apply gentle forces to keep rope taut when needed
+	var total_length = 0.0
+	for i in segment_bodies.size() - 1:
+		total_length += segment_bodies[i].global_position.distance_to(segment_bodies[i+1].global_position)
+	
+	# If rope is significantly stretched, apply corrective forces
+	if total_length > leash_length * 1.2:
+		for i in range(1, segment_bodies.size() - 1):
+			var to_prev = (segment_bodies[i-1].global_position - segment_bodies[i].global_position).normalized()
+			var to_next = (segment_bodies[i+1].global_position - segment_bodies[i].global_position).normalized()
+			var correction_force = (to_prev + to_next) * 0.5 * segment_mass * 10.0
+			segment_bodies[i].apply_central_force(correction_force)
+
+func get_tension() -> float:
+	# Calculate how taut the leash is (0.0 = slack, 1.0 = fully extended)
+	var total_length = 0.0
+	for i in segment_bodies.size() - 1:
+		total_length += segment_bodies[i].global_position.distance_to(segment_bodies[i+1].global_position)
+	
+	return clamp((total_length - leash_length * 0.9) / (leash_length * 0.3), 0.0, 1.0)
+
+func apply_pull_force(from_hand: bool, force: Vector3):
+	# Apply force to the appropriate end of the leash
+	# Since end segments are kinematic, apply to the next segment inward
+	var target_segment_index = 1 if from_hand else segment_bodies.size() - 2
+	if target_segment_index >= 0 and target_segment_index < segment_bodies.size():
+		segment_bodies[target_segment_index].apply_central_impulse(force)
