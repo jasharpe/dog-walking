@@ -132,6 +132,8 @@ transform = Transform3D(5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0)
 mesh = SubResource("ArrayMesh_b0eaf")
 
 [node name="StaticBody3D" type="StaticBody3D" parent="Flat"]
+collision_layer = 2
+collision_mask = 2
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Flat/StaticBody3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0477295, 3.93539, -0.000564575)
