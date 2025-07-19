@@ -15,3 +15,7 @@ func _ready() -> void:
 				objective_label.text = "[color=#00FF7F]" + objective_label.text + "[/color]"
 		objective.updated.connect(set_objective_label)
 		set_objective_label.call()
+
+func _process(delta: float) -> void:
+	if Input.is_action_just_pressed("ui_accept"):
+		get_tree().paused = not get_tree().paused

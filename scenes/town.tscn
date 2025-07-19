@@ -4,7 +4,7 @@
 [ext_resource type="PackedScene" uid="uid://4vi78bn6aqli" path="res://scenes/dog.tscn" id="1_f2a5t"]
 [ext_resource type="PackedScene" uid="uid://d2wrlvqlf5vf2" path="res://scenes/man.tscn" id="1_gt07c"]
 [ext_resource type="Script" uid="uid://b5o51dlj2vgi7" path="res://scripts/objective.gd" id="2_v3ani"]
-[ext_resource type="Script" uid="uid://cbyjdhqsxwh5k" path="res://scripts/leash.gd" id="3_ms2es"]
+[ext_resource type="PackedScene" uid="uid://bhtlu78fnkndf" path="res://leash.tscn" id="5_po04c"]
 [ext_resource type="Texture2D" uid="uid://btrx0xqc4wtuf" path="res://textures/Poliigon_GrassPatchyGround_4585/4K/Poliigon_GrassPatchyGround_4585_BaseColor.jpg" id="5_yn4qk"]
 [ext_resource type="Texture2D" uid="uid://dcxuamdktvwc0" path="res://textures/Poliigon_GrassPatchyGround_4585/4K/Poliigon_GrassPatchyGround_4585_Metallic.jpg" id="6_v3ani"]
 [ext_resource type="Texture2D" uid="uid://cy7v7fljvaaxh" path="res://textures/Poliigon_GrassPatchyGround_4585/4K/Poliigon_GrassPatchyGround_4585_Normal.png" id="7_5q1rr"]
@@ -91,6 +91,7 @@ size = Vector3(10.7805, 8.02985, 9.47604)
 size = Vector3(4.30176, 0.90686, 1.34253)
 
 [node name="Town" type="Node3D"]
+process_mode = 1
 script = ExtResource("1_eruj1")
 objectives = Array[ExtResource("2_v3ani")]([SubResource("Resource_5q1rr")])
 
@@ -107,9 +108,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0, 3)
 
 [node name="Man" parent="." instance=ExtResource("1_gt07c")]
 
-[node name="Leash" type="Node3D" parent="."]
-script = ExtResource("3_ms2es")
-leash_length = 5.0
+[node name="Leash" parent="." instance=ExtResource("5_po04c")]
 
 [node name="StaticBody3D" type="StaticBody3D" parent="."]
 

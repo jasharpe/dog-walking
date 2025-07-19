@@ -11,14 +11,14 @@ var leash_length: float
 @export var objectives: Array[Objective]
 
 func _ready() -> void:
-	leash.hand = man.hand
-	leash.neck = dog.neck
-	leash_length = 1.2 * (leash.hand.global_position - leash.neck.global_position).length()
-	leash.leash_length = leash_length
-	man.leash_length = leash_length
-	dog.leash_length = leash_length
-	man.dog = dog
-	dog.man = man
+	#leash.hand = man.hand
+	#leash.neck = dog.neck
+	#leash_length = 1.2 * (leash.hand.global_position - leash.neck.global_position).length()
+	#leash.leash_length = leash_length
+	leash.attach_start_to_node(man.hand)
+	leash.attach_end_to_node(dog.neck)
+	#man.dog = dog
+	#dog.man = man
 	man.bush_checked.connect(_bush_checked)
 	
 	# TODO: Randomly spawn 20 instances of bush.tscn around a 50m x 50m square centered at the origin.

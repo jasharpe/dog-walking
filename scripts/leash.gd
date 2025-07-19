@@ -1,317 +1,371 @@
 extends Node3D
 class_name Leash
 
-@export var hand: Node3D
-@export var neck: Node3D
-@export var leash_length: float = 2.0
-@export var rope_radius: float = 0.02
-@export var segments: int = 20
-
-# Physics properties
-@export_group("Physics")
-@export var segment_mass: float = 0.05  # Lighter segments
-@export var linear_damping: float = 2.0  # Higher damping
-@export var angular_damping: float = 2.0  # Higher damping
-@export var joint_stiffness: float = 1000.0  # Much stiffer
-@export var joint_damping: float = 50.0  # More damping
-
-# Visual properties
-@export_group("Visual")
+@export var segment_count: int = 10
+@export var segment_length: float = 1.0
+@export var segment_radius: float = 0.1
+@export var rope_mass: float = 1.0
+@export var anchor_to_parent: bool = true
+@export var rope_stiffness: float = 0.5  # 0-1 range
 @export var rope_material: Material
-@export var smoothing_iterations: int = 3
+@export var linear_damping: float = 0.5
+@export var angular_damping: float = 2.0
+@export var stretch_tolerance: float = 0.1  # 10% stretch tolerance
+@export var start_node: Node3D = null  # Node to attach start of rope
+@export var end_node: Node3D = null    # Node to attach end of rope
 
-# Internal references
-var segment_bodies: Array[RigidBody3D] = []
-var joints: Array[Generic6DOFJoint3D] = []
-var visual_path: Path3D
-var path_follow: PathFollow3D
-var mesh_instance: MeshInstance3D
+var rope_segments: Array[RigidBody3D] = []
+var joints: Array[PinJoint3D] = []
+var attachment_joint: PinJoint3D = null
+var start_joint: Node3D = null  # Can be PinJoint3D or Generic6DOFJoint3D
+var end_joint: Node3D = null    # Can be PinJoint3D or Generic6DOFJoint3D
 
 func _ready():
-	# Wait for parent to be ready (so hand/neck references are set)
-	await get_parent().ready
+	generate_rope()
+	rotation.z = PI / 2
 	
-	if not hand or not neck:
-		push_error("Leash requires both hand and neck nodes to be set")
-		return
-	
-	# Ensure we're in the tree before accessing global positions
-	if not is_inside_tree():
-		await tree_entered
-	
-	setup_rope_segments()
-	setup_visual_representation()
+	# Connect to nodes if set in inspector
+	if start_node:
+		attach_start_to_node(start_node)
+	if end_node:
+		attach_end_to_node(end_node)
 
-func setup_rope_segments():
-	var segment_length = leash_length / float(segments)
-	var start_pos = hand.global_position
-	var end_pos = neck.global_position
-	var direction = (end_pos - start_pos).normalized()
-	
-	# Create segments
-	for i in segments:
-		var segment = create_segment(i, segment_length)
-		
-		# Add to scene tree first
-		add_child(segment)
-		segment_bodies.append(segment)
-		
-		# Now we can safely set global position
-		var t = float(i) / float(segments - 1)
-		segment.global_position = start_pos.lerp(end_pos, t)
-	
-	# Create joints between segments
-	for i in segments - 1:
-		var joint = create_joint(segment_bodies[i], segment_bodies[i + 1])
-		add_child(joint)
-		joints.append(joint)
-	
-	# Attach ends to hand and neck
-	attach_to_bone(segment_bodies[0], hand, true)
-	attach_to_bone(segment_bodies[-1], neck, false)
+func _process(delta: float):
+	if rope_segments.size() > 0:
+		$Camera3D.position = rope_segments[0].position + Vector3(0, 1, -3)
+		$Camera3D.look_at(rope_segments[0].position, Vector3.UP)
 
-func create_segment(index: int, length: float) -> RigidBody3D:
-	var segment = RigidBody3D.new()
-	segment.name = "LeashSegment" + str(index)
-	segment.mass = segment_mass
-	segment.linear_damp = linear_damping
-	segment.angular_damp = angular_damping
-	segment.continuous_cd = true  # Prevent tunneling
+func _physics_process(delta: float):
+	# Update rope position if attached to nodes by applying forces
+	if start_node and rope_segments.size() > 0:
+		var first_segment = rope_segments[0]
+		var target_pos = start_node.global_position
+		var current_pos = first_segment.global_position
+		var distance = current_pos.distance_to(target_pos)
+		
+		if distance > 0.1:  # Only apply force if significantly far
+			var direction = (target_pos - current_pos).normalized()
+			# Apply stronger force to pull rope to attachment point
+			first_segment.set_linear_velocity(direction * min(distance * 10.0, 20.0))
 	
-	# Add collision shape
-	var collision = CollisionShape3D.new()
-	var capsule = CapsuleShape3D.new()
-	capsule.radius = rope_radius
-	capsule.height = length
-	collision.shape = capsule
-	segment.add_child(collision)
+	if end_node and rope_segments.size() > 0:
+		var last_segment = rope_segments[-1]
+		var target_pos = end_node.global_position
+		var current_pos = last_segment.global_position
+		var distance = current_pos.distance_to(target_pos)
+		
+		if distance > 0.1:  # Only apply force if significantly far
+			var direction = (target_pos - current_pos).normalized()
+			# Apply stronger force to pull rope to attachment point
+			last_segment.set_linear_velocity(direction * min(distance * 10.0, 20.0))
 	
-	# Set collision layers (adjust as needed)
-	segment.collision_layer = 4  # Leash layer
-	segment.collision_mask = 1 | 2  # Collide with environment and characters
-	
-	return segment
+	# Enforce segment length constraints to prevent excessive stretching
+	for i in range(rope_segments.size() - 1):
+		var seg_a = rope_segments[i]
+		var seg_b = rope_segments[i + 1]
+		var distance = seg_a.global_position.distance_to(seg_b.global_position)
+		
+		if distance > segment_length * (1.0 + stretch_tolerance):
+			var direction = (seg_b.global_position - seg_a.global_position).normalized()
+			var correction_force = direction * (distance - segment_length) * 10.0
+			seg_b.apply_central_impulse(-correction_force * seg_b.mass * delta)
+			seg_a.apply_central_impulse(correction_force * seg_a.mass * delta)
 
-func create_joint(body_a: RigidBody3D, body_b: RigidBody3D) -> Generic6DOFJoint3D:
-	var joint = Generic6DOFJoint3D.new()
-	joint.node_a = body_a.get_path()
-	joint.node_b = body_b.get_path()
+func generate_rope():
+	clear_existing_rope()
 	
-	# Calculate the initial distance between segments
-	var segment_length = leash_length / float(segments)
+	var previous_body: RigidBody3D = null
 	
-	# Configure joint limits to maintain segment length
-	# Much tighter constraints to prevent stretching
-	for axis in ["x", "y", "z"]:
-		# Linear limits - very small amount of stretch
-		joint.set("linear_limit_" + axis + "/enabled", true)
-		joint.set("linear_limit_" + axis + "/upper_distance", segment_length * 0.1)  # Only 10% stretch allowed
-		joint.set("linear_limit_" + axis + "/lower_distance", -segment_length * 0.1)
-		joint.set("linear_limit_" + axis + "/softness", 0.1)  # Make it stiff
-		joint.set("linear_limit_" + axis + "/restitution", 0.5)
-		joint.set("linear_limit_" + axis + "/damping", 1.0)
+	# Create rope segments
+	for i in range(segment_count):
+		var segment = create_rope_segment(i)
+		rope_segments.append(segment)
 		
-		# Angular limits - allow more rotation for natural movement
-		joint.set("angular_limit_" + axis + "/enabled", true)
-		joint.set("angular_limit_" + axis + "/upper_angle", deg_to_rad(60))
-		joint.set("angular_limit_" + axis + "/lower_angle", deg_to_rad(-60))
-		joint.set("angular_limit_" + axis + "/softness", 0.5)
+		# Position segment
+		segment.global_position = global_position + Vector3(0, -i * segment_length, 0)
 		
-		# Spring properties - much stiffer springs
-		joint.set("linear_spring_" + axis + "/enabled", true)
-		joint.set("linear_spring_" + axis + "/stiffness", 1000.0)  # Much higher stiffness
-		joint.set("linear_spring_" + axis + "/damping", 50.0)
-		joint.set("linear_spring_" + axis + "/equilibrium_point", 0.0)
+		# Create joint to connect segments
+		if i > 0:
+			var joint = create_joint(previous_body, segment, i)
+			joints.append(joint)
+		elif anchor_to_parent:
+			# Anchor first segment to this node's position
+			var anchor_joint = create_anchor_joint(segment)
+			joints.append(anchor_joint)
+		
+		previous_body = segment
+
+func create_rope_segment(index: int) -> RigidBody3D:
+	var rigid_body = RigidBody3D.new()
+	rigid_body.name = "RopeSegment_" + str(index)
+	rigid_body.mass = rope_mass / segment_count  # Distribute mass across segments
+	
+	# Add physics properties for better rope behavior
+	rigid_body.linear_damp = linear_damping
+	rigid_body.angular_damp = angular_damping
+	rigid_body.continuous_cd = true  # Better collision detection
+	rigid_body.can_sleep = false  # Keep rope active
+	
+	# Create collision shape
+	var collision_shape = CollisionShape3D.new()
+	var capsule_shape = CapsuleShape3D.new()
+	capsule_shape.radius = segment_radius
+	capsule_shape.height = segment_length
+	collision_shape.shape = capsule_shape
+	
+	# Create visual mesh
+	var mesh_instance = MeshInstance3D.new()
+	var capsule_mesh = CapsuleMesh.new()
+	capsule_mesh.radius = segment_radius
+	# Make segments slightly overlap for visual continuity
+	capsule_mesh.height = segment_length * 1.1
+	mesh_instance.mesh = capsule_mesh
+	
+	# Apply material if provided
+	if rope_material:
+		mesh_instance.material_override = rope_material
+	
+	# Add components to rigid body
+	rigid_body.add_child(collision_shape)
+	rigid_body.add_child(mesh_instance)
+	
+	# Add to scene
+	add_child(rigid_body)
+	
+	return rigid_body
+
+func create_joint(body_a: RigidBody3D, body_b: RigidBody3D, index: int) -> PinJoint3D:
+	var joint = PinJoint3D.new()
+	joint.name = "Joint_" + str(index)
+	
+	# Add joint to scene first so we can set up paths
+	add_child(joint)
+	
+	# Position joint at the connection point between segments
+	# Place it at the bottom of body_a
+	joint.global_position = body_a.global_position - Vector3(0, segment_length * 0.5, 0)
+	
+	# Set up joint connections
+	joint.set_node_a(body_a.get_path())
+	joint.set_node_b(body_b.get_path())
+	
+	# Configure joint parameters for better rope behavior
+	joint.set_param(PinJoint3D.PARAM_DAMPING, rope_stiffness)
+	joint.set_param(PinJoint3D.PARAM_IMPULSE_CLAMP, 0.0)  # No impulse limit
 	
 	return joint
 
-func attach_to_bone(segment: RigidBody3D, bone: Node3D, is_hand: bool):
-	# Store reference for manual position updates
-	if is_hand:
-		segment.set_meta("attached_to_hand", true)
-	else:
-		segment.set_meta("attached_to_neck", true)
+func create_anchor_joint(body: RigidBody3D) -> PinJoint3D:
+	# Create a static body to act as anchor point
+	var anchor_body = StaticBody3D.new()
+	anchor_body.name = "RopeAnchor"
+	anchor_body.global_position = global_position
+	add_child(anchor_body)
 	
-	# Make the end segments kinematic so we can control them directly
-	segment.freeze = true
-	segment.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	# Create joint between anchor and first segment
+	var joint = PinJoint3D.new()
+	joint.name = "AnchorJoint"
+	add_child(joint)
+	
+	joint.global_position = global_position
+	joint.set_node_a(anchor_body.get_path())
+	joint.set_node_b(body.get_path())
+	
+	# Make anchor joint stiffer
+	joint.set_param(PinJoint3D.PARAM_DAMPING, rope_stiffness * 2.0)
+	joint.set_param(PinJoint3D.PARAM_IMPULSE_CLAMP, 0.0)
+	
+	return joint
 
-func setup_visual_representation():
-	# Create path for smooth visuals
-	visual_path = Path3D.new()
-	visual_path.curve = Curve3D.new()
-	add_child(visual_path)
+func clear_existing_rope():
+	# Remove existing segments
+	for segment in rope_segments:
+		if is_instance_valid(segment):
+			segment.queue_free()
+	rope_segments.clear()
 	
-	# Create mesh instance for the rope
-	mesh_instance = MeshInstance3D.new()
-	if rope_material:
-		mesh_instance.material_override = rope_material
-	add_child(mesh_instance)
+	# Remove existing joints
+	for joint in joints:
+		if is_instance_valid(joint):
+			joint.queue_free()
+	joints.clear()
+	
+	# Remove anchor if it exists
+	var anchor = get_node_or_null("RopeAnchor")
+	if anchor:
+		anchor.queue_free()
+	
+	# Clear attachment joints
+	if attachment_joint and is_instance_valid(attachment_joint):
+		attachment_joint.queue_free()
+		attachment_joint = null
+	if start_joint and is_instance_valid(start_joint):
+		start_joint.queue_free()
+		start_joint = null
+	if end_joint and is_instance_valid(end_joint):
+		end_joint.queue_free()
+		end_joint = null
 
-func _physics_process(_delta):
-	# Update end segment positions to follow hand and neck
-	if segment_bodies.size() > 0:
-		if hand and segment_bodies[0].has_meta("attached_to_hand"):
-			segment_bodies[0].global_position = hand.global_position
-		if neck and segment_bodies[-1].has_meta("attached_to_neck"):
-			segment_bodies[-1].global_position = neck.global_position
-	
-	update_visual_representation()
-	
-	# Optional: Apply additional forces for better behavior
-	apply_tension_forces()
+# Utility functions
+func get_rope_tip() -> RigidBody3D:
+	if rope_segments.size() > 0:
+		return rope_segments[-1]
+	return null
 
-func update_visual_representation():
-	if not visual_path or not visual_path.curve:
+func apply_force_to_tip(force: Vector3):
+	var tip = get_rope_tip()
+	if tip:
+		tip.apply_central_force(force)
+
+func apply_impulse_to_tip(impulse: Vector3):
+	var tip = get_rope_tip()
+	if tip:
+		tip.apply_central_impulse(impulse)
+
+func set_rope_gravity_scale(scale: float):
+	for segment in rope_segments:
+		segment.gravity_scale = scale
+
+func update_rope_stiffness():
+	for i in range(joints.size()):
+		var joint = joints[i]
+		if joint is PinJoint3D:
+			# Make anchor joint stiffer
+			var stiffness = rope_stiffness * 2.0 if i == 0 and anchor_to_parent else rope_stiffness
+			joint.set_param(PinJoint3D.PARAM_DAMPING, stiffness)
+
+func attach_to_object(object: Node3D, offset: Vector3 = Vector3.ZERO):
+	if rope_segments.is_empty():
 		return
 	
-	var curve = visual_path.curve
-	curve.clear_points()
+	# Detach any existing attachment
+	detach_from_object()
 	
-	# Get segment positions
-	var points: Array[Vector3] = []
-	for segment in segment_bodies:
-		points.append(segment.global_position)
+	var tip = get_rope_tip()
+	attachment_joint = PinJoint3D.new()
+	attachment_joint.name = "AttachmentJoint"
+	add_child(attachment_joint)
 	
-	# Smooth the points
-	var smoothed_points = smooth_points(points, smoothing_iterations)
+	attachment_joint.global_position = object.global_position + offset
+	attachment_joint.set_node_a(tip.get_path())
+	attachment_joint.set_node_b(object.get_path())
 	
-	# Add points to curve
-	for point in smoothed_points:
-		curve.add_point(visual_path.to_local(point))
-	
-	# Generate rope mesh
-	generate_rope_mesh(curve)
+	# Make attachment joint very stiff
+	attachment_joint.set_param(PinJoint3D.PARAM_DAMPING, 1.0)
+	attachment_joint.set_param(PinJoint3D.PARAM_IMPULSE_CLAMP, 0.0)
 
-func smooth_points(points: Array[Vector3], iterations: int) -> Array[Vector3]:
-	var result = points.duplicate()
-	
-	for _i in iterations:
-		var new_points: Array[Vector3] = []
-		new_points.append(result[0])  # Keep first point fixed
-		
-		for j in range(1, result.size() - 1):
-			# Average with neighbors
-			var smoothed = (result[j-1] + result[j] * 2.0 + result[j+1]) / 4.0
-			new_points.append(smoothed)
-		
-		new_points.append(result[-1])  # Keep last point fixed
-		result = new_points
-	
-	return result
+func detach_from_object():
+	if attachment_joint and is_instance_valid(attachment_joint):
+		attachment_joint.queue_free()
+		attachment_joint = null
 
-func generate_rope_mesh(curve: Curve3D):
-	if curve.point_count < 2:
+func set_rope_length(new_segment_count: int):
+	segment_count = new_segment_count
+	regenerate_rope()
+
+# Call this to regenerate the rope with new parameters
+func regenerate_rope():
+	generate_rope()
+	update_rope_stiffness()
+
+# New functions for dual-end attachment
+func attach_start_to_node(node: Node3D, offset: Vector3 = Vector3.ZERO):
+	if rope_segments.is_empty():
 		return
 	
-	var arrays = []
-	arrays.resize(Mesh.ARRAY_MAX)
+	# Remove existing start attachment
+	if start_joint and is_instance_valid(start_joint):
+		start_joint.queue_free()
 	
-	var vertices = PackedVector3Array()
-	var normals = PackedVector3Array()
-	var uvs = PackedVector2Array()
-	var indices = PackedInt32Array()
+	# Remove the anchor joint if it exists
+	if anchor_to_parent and joints.size() > 0:
+		joints[0].queue_free()
+		joints.remove_at(0)
 	
-	var radial_segments = 8
-	var length_accumulated = 0.0
+	start_node = node
 	
-	# Generate vertices along the curve
-	for i in curve.point_count:
-		var point = curve.get_point_position(i)
-		var tangent: Vector3
-		
-		if i == 0:
-			tangent = (curve.get_point_position(1) - point).normalized()
-		elif i == curve.point_count - 1:
-			tangent = (point - curve.get_point_position(i-1)).normalized()
-		else:
-			tangent = (curve.get_point_position(i+1) - curve.get_point_position(i-1)).normalized()
-		
-		# Create perpendicular vectors
-		var right = tangent.cross(Vector3.UP).normalized()
-		if right.length() < 0.01:
-			right = tangent.cross(Vector3.RIGHT).normalized()
-		var up = right.cross(tangent).normalized()
-		
-		# Add vertices in a circle
-		for j in radial_segments:
-			var angle = (j / float(radial_segments)) * TAU
-			var offset = (right * cos(angle) + up * sin(angle)) * rope_radius
-			vertices.append(point + offset)
-			normals.append(offset.normalized())
-			uvs.append(Vector2(j / float(radial_segments), length_accumulated))
-		
-		if i > 0:
-			length_accumulated += (point - curve.get_point_position(i-1)).length()
+	# Move the first segment to the attachment point immediately
+	rope_segments[0].global_position = node.global_position + offset
+	rope_segments[0].set_linear_velocity(Vector3.ZERO)
 	
-	# Generate indices
-	for i in curve.point_count - 1:
-		for j in radial_segments:
-			var current = i * radial_segments + j
-			var next = i * radial_segments + (j + 1) % radial_segments
-			var current_next = (i + 1) * radial_segments + j
-			var next_next = (i + 1) * radial_segments + (j + 1) % radial_segments
-			
-			# First triangle
-			indices.append(current)
-			indices.append(next)
-			indices.append(next_next)
-			
-			# Second triangle
-			indices.append(current)
-			indices.append(next_next)
-			indices.append(current_next)
+	# Create a Generic6DOFJoint3D for more control
+	var joint = Generic6DOFJoint3D.new()
+	joint.name = "StartAttachmentJoint"
+	add_child(joint)
 	
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_NORMAL] = normals
-	arrays[Mesh.ARRAY_TEX_UV] = uvs
-	arrays[Mesh.ARRAY_INDEX] = indices
+	joint.global_position = node.global_position + offset
+	joint.set_node_a(node.get_path())
+	joint.set_node_b(rope_segments[0].get_path())
 	
-	var array_mesh = ArrayMesh.new()
-	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	mesh_instance.mesh = array_mesh
+	# Lock all axes for a rigid connection
+	for i in range(3):
+		joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, 0.0)
+		joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.0)
+		joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, 0.0)
+		joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.0)
+		joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, 0.0)
+		joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.0)
+	
+	start_joint = joint
 
-func apply_tension_forces():
-	# More aggressive tension maintenance
-	var segments_count = segment_bodies.size()
-	if segments_count < 2:
+func attach_end_to_node(node: Node3D, offset: Vector3 = Vector3.ZERO):
+	if rope_segments.is_empty():
 		return
-		
-	var desired_segment_length = leash_length / float(segments - 1)
 	
-	# Apply distance constraints between each pair of segments
-	for i in range(segments_count - 1):
-		var seg_a = segment_bodies[i]
-		var seg_b = segment_bodies[i + 1]
-		
-		var current_distance = seg_a.global_position.distance_to(seg_b.global_position)
-		var distance_error = current_distance - desired_segment_length
-		
-		# Skip if distance is acceptable
-		if abs(distance_error) < desired_segment_length * 0.1:
-			continue
-			
-		# Calculate correction force
-		var direction = (seg_b.global_position - seg_a.global_position).normalized()
-		var correction_strength = clamp(abs(distance_error) / desired_segment_length, 0.0, 1.0) * 50.0
-		
-		# Apply equal and opposite forces to maintain constraint
-		if not seg_a.freeze:
-			seg_a.apply_central_force(direction * distance_error * correction_strength)
-		if not seg_b.freeze:
-			seg_b.apply_central_force(-direction * distance_error * correction_strength)
-
-func get_tension() -> float:
-	# Calculate how taut the leash is (0.0 = slack, 1.0 = fully extended)
-	var total_length = 0.0
-	for i in segment_bodies.size() - 1:
-		total_length += segment_bodies[i].global_position.distance_to(segment_bodies[i+1].global_position)
+	# Remove existing end attachment
+	if end_joint and is_instance_valid(end_joint):
+		end_joint.queue_free()
 	
-	return clamp((total_length - leash_length * 0.9) / (leash_length * 0.3), 0.0, 1.0)
+	end_node = node
+	
+	# Move the last segment to the attachment point immediately
+	var tip = get_rope_tip()
+	tip.global_position = node.global_position + offset
+	tip.set_linear_velocity(Vector3.ZERO)
+	
+	# Create a Generic6DOFJoint3D for more control
+	var joint = Generic6DOFJoint3D.new()
+	joint.name = "EndAttachmentJoint"
+	add_child(joint)
+	
+	joint.global_position = node.global_position + offset
+	joint.set_node_a(tip.get_path())
+	joint.set_node_b(node.get_path())
+	
+	# Lock all axes for a rigid connection
+	for i in range(3):
+		joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, 0.0)
+		joint.set_param_x(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.0)
+		joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, 0.0)
+		joint.set_param_y(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.0)
+		joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_LOWER_LIMIT, 0.0)
+		joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.0)
+	
+	end_joint = joint
 
-func apply_pull_force(from_hand: bool, force: Vector3):
-	# Apply force to the appropriate end of the leash
-	# Since end segments are kinematic, apply to the next segment inward
-	var target_segment_index = 1 if from_hand else segment_bodies.size() - 2
-	if target_segment_index >= 0 and target_segment_index < segment_bodies.size():
-		segment_bodies[target_segment_index].apply_central_impulse(force)
+func detach_start():
+	if start_joint and is_instance_valid(start_joint):
+		start_joint.queue_free()
+		start_joint = null
+		start_node = null
+		
+		# Restore anchor if needed
+		if anchor_to_parent and rope_segments.size() > 0:
+			var anchor_joint = create_anchor_joint(rope_segments[0])
+			joints.insert(0, anchor_joint)
+
+func detach_end():
+	if end_joint and is_instance_valid(end_joint):
+		end_joint.queue_free()
+		end_joint = null
+		end_node = null
+
+func connect_between_nodes(node_a: Node3D, node_b: Node3D):
+	"""Convenience function to connect rope between two nodes"""
+	attach_start_to_node(node_a)
+	attach_end_to_node(node_b)
+
+# Debug visualization
+func draw_rope_debug():
+	# Override this in a tool script to visualize rope in editor
+	pass
