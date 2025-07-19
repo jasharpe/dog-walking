@@ -111,6 +111,7 @@ func determine_behavior_state(bush_of_interest: Bush) -> void:
 	var man_is_moving = man_speed > man_speed_threshold
 	
 	is_heeling = man_is_moving
+	is_heeling = false
 
 func handle_movement(delta: float) -> void:
 	var target_velocity = Vector3.ZERO

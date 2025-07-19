@@ -9,11 +9,11 @@ class_name Leash
 
 # Physics properties
 @export_group("Physics")
-@export var segment_mass: float = 0.1
-@export var linear_damping: float = 0.8
-@export var angular_damping: float = 1.0
-@export var joint_stiffness: float = 100.0
-@export var joint_damping: float = 10.0
+@export var segment_mass: float = 0.05  # Lighter segments
+@export var linear_damping: float = 2.0  # Higher damping
+@export var angular_damping: float = 2.0  # Higher damping
+@export var joint_stiffness: float = 1000.0  # Much stiffer
+@export var joint_damping: float = 50.0  # More damping
 
 # Visual properties
 @export_group("Visual")
@@ -97,24 +97,31 @@ func create_joint(body_a: RigidBody3D, body_b: RigidBody3D) -> Generic6DOFJoint3
 	joint.node_a = body_a.get_path()
 	joint.node_b = body_b.get_path()
 	
-	# Configure joint limits and spring properties
-	# Allow some movement but keep segments connected
+	# Calculate the initial distance between segments
+	var segment_length = leash_length / float(segments)
+	
+	# Configure joint limits to maintain segment length
+	# Much tighter constraints to prevent stretching
 	for axis in ["x", "y", "z"]:
-		# Linear limits - small amount of stretch
+		# Linear limits - very small amount of stretch
 		joint.set("linear_limit_" + axis + "/enabled", true)
-		joint.set("linear_limit_" + axis + "/upper_distance", 0.05)
-		joint.set("linear_limit_" + axis + "/lower_distance", -0.05)
-		joint.set("linear_limit_" + axis + "/softness", 0.5)
+		joint.set("linear_limit_" + axis + "/upper_distance", segment_length * 0.1)  # Only 10% stretch allowed
+		joint.set("linear_limit_" + axis + "/lower_distance", -segment_length * 0.1)
+		joint.set("linear_limit_" + axis + "/softness", 0.1)  # Make it stiff
+		joint.set("linear_limit_" + axis + "/restitution", 0.5)
+		joint.set("linear_limit_" + axis + "/damping", 1.0)
 		
-		# Angular limits - prevent excessive rotation
+		# Angular limits - allow more rotation for natural movement
 		joint.set("angular_limit_" + axis + "/enabled", true)
-		joint.set("angular_limit_" + axis + "/upper_angle", deg_to_rad(45))
-		joint.set("angular_limit_" + axis + "/lower_angle", deg_to_rad(-45))
+		joint.set("angular_limit_" + axis + "/upper_angle", deg_to_rad(60))
+		joint.set("angular_limit_" + axis + "/lower_angle", deg_to_rad(-60))
+		joint.set("angular_limit_" + axis + "/softness", 0.5)
 		
-		# Spring properties for natural movement
+		# Spring properties - much stiffer springs
 		joint.set("linear_spring_" + axis + "/enabled", true)
-		joint.set("linear_spring_" + axis + "/stiffness", joint_stiffness)
-		joint.set("linear_spring_" + axis + "/damping", joint_damping)
+		joint.set("linear_spring_" + axis + "/stiffness", 1000.0)  # Much higher stiffness
+		joint.set("linear_spring_" + axis + "/damping", 50.0)
+		joint.set("linear_spring_" + axis + "/equilibrium_point", 0.0)
 	
 	return joint
 
@@ -265,18 +272,34 @@ func generate_rope_mesh(curve: Curve3D):
 	mesh_instance.mesh = array_mesh
 
 func apply_tension_forces():
-	# Apply gentle forces to keep rope taut when needed
-	var total_length = 0.0
-	for i in segment_bodies.size() - 1:
-		total_length += segment_bodies[i].global_position.distance_to(segment_bodies[i+1].global_position)
+	# More aggressive tension maintenance
+	var segments_count = segment_bodies.size()
+	if segments_count < 2:
+		return
+		
+	var desired_segment_length = leash_length / float(segments - 1)
 	
-	# If rope is significantly stretched, apply corrective forces
-	if total_length > leash_length * 1.2:
-		for i in range(1, segment_bodies.size() - 1):
-			var to_prev = (segment_bodies[i-1].global_position - segment_bodies[i].global_position).normalized()
-			var to_next = (segment_bodies[i+1].global_position - segment_bodies[i].global_position).normalized()
-			var correction_force = (to_prev + to_next) * 0.5 * segment_mass * 10.0
-			segment_bodies[i].apply_central_force(correction_force)
+	# Apply distance constraints between each pair of segments
+	for i in range(segments_count - 1):
+		var seg_a = segment_bodies[i]
+		var seg_b = segment_bodies[i + 1]
+		
+		var current_distance = seg_a.global_position.distance_to(seg_b.global_position)
+		var distance_error = current_distance - desired_segment_length
+		
+		# Skip if distance is acceptable
+		if abs(distance_error) < desired_segment_length * 0.1:
+			continue
+			
+		# Calculate correction force
+		var direction = (seg_b.global_position - seg_a.global_position).normalized()
+		var correction_strength = clamp(abs(distance_error) / desired_segment_length, 0.0, 1.0) * 50.0
+		
+		# Apply equal and opposite forces to maintain constraint
+		if not seg_a.freeze:
+			seg_a.apply_central_force(direction * distance_error * correction_strength)
+		if not seg_b.freeze:
+			seg_b.apply_central_force(-direction * distance_error * correction_strength)
 
 func get_tension() -> float:
 	# Calculate how taut the leash is (0.0 = slack, 1.0 = fully extended)
