@@ -561,7 +561,7 @@ func generate_rope_mesh(points: Array[Vector3]) -> ArrayMesh:
 		var frame = frames[i]
 		
 		# Generate circle of vertices around this point
-		var width: float = 0.4
+		var width: float = 0.04
 		for j in range(mesh_resolution):
 			var angle = j * TAU / mesh_resolution
 			var offset = (frame.right * cos(angle) + frame.up * sin(angle)) * width
@@ -578,14 +578,14 @@ func generate_rope_mesh(points: Array[Vector3]) -> ArrayMesh:
 			var next_ring = (i + 1) * mesh_resolution
 			var next_j = (j + 1) % mesh_resolution
 			
-			# Two triangles per quad
+			# Two triangles per quad (corrected winding order)
 			indices.append(current_ring + j)
-			indices.append(next_ring + j)
 			indices.append(current_ring + next_j)
+			indices.append(next_ring + j)
 			
 			indices.append(current_ring + next_j)
-			indices.append(next_ring + j)
 			indices.append(next_ring + next_j)
+			indices.append(next_ring + j)
 	
 	# Create the mesh
 	var arrays = []
