@@ -26,7 +26,7 @@ var mouse_sensitivity: float = 0.01
 var is_rotating_camera: bool = false
 
 # Movement parameters
-var base_movement_force: float = 50.0
+var base_movement_force: float = 10.0
 var run_force_multiplier: float = 1.5
 var movement_acceleration: float = 20.0
 var movement_friction: float = 20.0
@@ -138,8 +138,8 @@ func handle_walking(delta: float) -> void:
 	
 	# Rotate model to face movement direction
 	var horizontal_velocity = Vector3(velocity.x, 0, velocity.z)
-	if horizontal_velocity.length() > 0.1:
-		var target_rotation = atan2(horizontal_velocity.x, horizontal_velocity.z)
+	if desired_force.length() > 0.1:
+		var target_rotation = atan2(desired_force.x, desired_force.z)
 		rotation.y = lerp_angle(rotation.y, target_rotation, 10.0 * delta)
 	
 	# Handle animation based on horizontal movement and running state
@@ -152,14 +152,15 @@ func calculate_leash_force() -> Vector3:
 	# Get the first segment of the leash (attached to man's hand)
 	var first_segment = leash.rope_segments[0]
 	var hand_pos = hand.global_position
+	var character_pos = global_position
 	var segment_pos = first_segment.global_position
 	
-	# Calculate the vector from hand to first leash segment
+	# Calculate the vector from character center to first leash segment
 	var to_segment = segment_pos - hand_pos
 	var distance = to_segment.length()
 	
 	# Apply force if there's tension (distance > small threshold)
-	var force_threshold = 0.2  # Small threshold to avoid jitter
+	var force_threshold = 0.5  # Small threshold to avoid jitter
 	if distance > force_threshold:
 		var force_direction = to_segment.normalized()
 		var force_magnitude = (distance - force_threshold) * 25.0  # Leash stiffness

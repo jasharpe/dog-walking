@@ -172,7 +172,9 @@ func create_anchor_joint(body: RigidBody3D) -> PinJoint3D:
 	# Create a static body to act as anchor point
 	var anchor_body = StaticBody3D.new()
 	anchor_body.name = "RopeAnchor"
-	anchor_body.global_position = global_position
+	get_parent().ready.connect(func() -> void:
+		anchor_body.global_position = global_position
+	)
 	add_child(anchor_body)
 	
 	# Create joint between anchor and first segment

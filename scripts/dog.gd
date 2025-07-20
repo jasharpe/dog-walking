@@ -15,13 +15,13 @@ var ANIM_WALK: String = "AnimalArmature|AnimalArmature|AnimalArmature|Walk"
 var ANIM_RUN: String = "AnimalArmature|AnimalArmature|AnimalArmature|Run"
 
 # Dog movement parameters
-var base_movement_force: float = 30.0
+var base_movement_force: float = 5.0
 var movement_acceleration: float = 15.0
 var movement_friction: float = 15.0
 var dog_strength: float = 1.0
 
 # Leash physics parameters
-var leash_force_multiplier: float = 8.0
+var leash_force_multiplier: float = 15.0
 var dog_resistance: float = 0.3
 
 # Heel behavior parameters
@@ -204,15 +204,15 @@ func calculate_leash_force() -> Vector3:
 	
 	# Get the last segment of the leash (attached to dog's neck)
 	var last_segment = leash.rope_segments[-1]
-	var neck_pos = neck.global_position
+	var character_pos = global_position
 	var segment_pos = last_segment.global_position
 	
-	# Calculate the vector from neck to last leash segment
-	var to_segment = segment_pos - neck_pos
+	# Calculate the vector from character center to last leash segment
+	var to_segment = segment_pos - character_pos
 	var distance = to_segment.length()
 	
 	# Apply force if there's tension (distance > small threshold)
-	var force_threshold = 0.2  # Small threshold to avoid jitter
+	var force_threshold = 0.5  # Small threshold to avoid jitter
 	if distance > force_threshold:
 		var force_direction = to_segment.normalized()
 		var force_magnitude = (distance - force_threshold) * 20.0  # Slightly weaker than man

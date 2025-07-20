@@ -4,5 +4,6 @@
 
 [node name="Leash" type="Node3D"]
 script = ExtResource("1_76g61")
+rope_collision_mask = 3
 
 [node name="Camera3D" type="Camera3D" parent="."]
