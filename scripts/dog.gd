@@ -138,6 +138,12 @@ func handle_movement(delta: float) -> void:
 	velocity.x += acceleration.x * delta
 	velocity.z += acceleration.z * delta
 	
+	# Also apply force to the last rope segment to prevent oscillation
+	if desired_force.length() > 0.1 and leash and not leash.rope_segments.is_empty():
+		var last_segment = leash.rope_segments[-1]
+		var rope_force = desired_force * 1.0  # Apply full desired force to rope
+		last_segment.apply_central_force(rope_force)
+	
 	# Apply damping
 	velocity.x = lerp(velocity.x, 0.0, movement_friction * 0.1 * delta)
 	velocity.z = lerp(velocity.z, 0.0, movement_friction * 0.1 * delta)

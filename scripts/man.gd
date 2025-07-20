@@ -132,6 +132,12 @@ func handle_walking(delta: float) -> void:
 	velocity.x += acceleration.x * delta
 	velocity.z += acceleration.z * delta
 	
+	# Also apply force to the first rope segment to prevent oscillation
+	if desired_force.length() > 0.1 and leash and not leash.rope_segments.is_empty():
+		var first_segment = leash.rope_segments[0]
+		var rope_force = desired_force * 1.0  # Apply a portion of man's desired force to rope
+		first_segment.apply_central_force(rope_force)
+	
 	# Apply movement friction/damping
 	velocity.x = lerp(velocity.x, 0.0, movement_friction * 0.1 * delta)
 	velocity.z = lerp(velocity.z, 0.0, movement_friction * 0.1 * delta)
@@ -156,7 +162,7 @@ func calculate_leash_force() -> Vector3:
 	var tension_distance = hand_pos.distance_to(segment_pos)
 	
 	# Only apply force if there's significant tension (distance > threshold)
-	var tension_threshold = 0.3
+	var tension_threshold = 1.0
 	if tension_distance < tension_threshold:
 		return Vector3.ZERO
 	
