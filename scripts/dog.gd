@@ -51,11 +51,37 @@ func _ready() -> void:
 	wander_target = global_position + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2))
 	if man:
 		man_previous_position = man.global_position
+	
+	# Debug: Check smell radius setup
+	print("SmellRadius shape: ", smell_radius.get_node("CollisionShape3D").shape)
+	print("SmellRadius disabled: ", smell_radius.get_node("CollisionShape3D").disabled)
+	var shape = smell_radius.get_node("CollisionShape3D").shape as SphereShape3D
+	if shape:
+		print("SmellRadius radius: ", shape.radius)
+	
+	# Temporary fix: Set collision mask to detect all layers
+	#smell_radius.collision_mask = 0xFFFFFFFF  # All layers
 
 var bush_of_interest: Bush
 
 func _physics_process(delta: float) -> void:
 	var bodies := smell_radius.get_overlapping_bodies()
+	
+	# Debug: Print smell radius info
+	#print("SmellRadius collision_mask: ", smell_radius.collision_mask)
+	#print("SmellRadius monitoring: ", smell_radius.monitoring)
+	#print("SmellRadius monitorable: ", smell_radius.monitorable)
+	#print("Bodies detected: ", bodies.size())
+	
+	# Debug: Print info about detected bodies
+	if bodies.size() > 0:
+		print("Dog detected ", bodies.size(), " bodies:")
+		for body in bodies:
+			var parent = body.get_parent()
+			print("  Body: ", body.name, " Parent: ", parent.name if parent else "null", " Is Bush: ", parent is Bush if parent else false)
+			if parent is Bush:
+				print("    Bush interesting: ", parent.interesting)
+	
 	if bush_of_interest and bush_of_interest.interesting and bush_of_interest in bodies.map(func(body): return body.get_parent()):
 		pass
 	else:

@@ -29,6 +29,17 @@ func _ready() -> void:
 		if true or randf_range(0, 1) < 0.5:
 			bush.interesting = true
 		add_child(bush)
+		
+		# Debug: Check bush collision setup
+		var static_body = bush.get_node("StaticBody3D")
+		if static_body:
+			print("Bush ", i, " collision_layer: ", static_body.collision_layer)
+			print("Bush ", i, " position: ", bush.position)
+			# Force the collision layer to ensure detection
+			static_body.collision_layer = 1  # Set to layer 1 which should be detected
+		else:
+			print("Bush ", i, " has no StaticBody3D!")
+			print("Bush children: ", bush.get_children().map(func(child): return child.name))
 
 func _bush_checked() -> void:
 	var objective = objectives[0]
