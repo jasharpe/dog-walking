@@ -34,7 +34,7 @@ var man_strength: float = 1.2
 
 # CharacterBody3D physics parameters
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
-var jump_velocity: float = 4.5
+var jump_velocity: float = 6
 
 var bush: Bush
 

@@ -6,7 +6,7 @@ class_name Leash
 @export var segment_radius: float = 0.1
 @export var rope_mass: float = 1.0
 @export var anchor_to_parent: bool = true
-@export var rope_stiffness: float = 0.5  # 0-1 range
+@export var rope_stiffness: float = 0.7  # 0-1 range
 @export var rope_material: Material
 @export var linear_damping: float = 0.5
 @export var angular_damping: float = 2.0
