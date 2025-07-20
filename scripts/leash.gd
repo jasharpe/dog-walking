@@ -18,6 +18,7 @@ class_name Leash
 @export var debug_mode: bool = false
 @export var leash_color: Color = Color(0.6, 0.4, 0.2)  # Brown color
 @export var mesh_resolution: int = 8  # Radial segments for the mesh
+@export var curve_smoothness: int = 4  # Points per segment for smooth curve
 
 @export_group("Collision Settings")
 @export_flags_3d_physics var rope_collision_layer: int = 1  # What layer the rope is on
@@ -444,24 +445,61 @@ func update_visual_mesh():
 		return
 	
 	# Get all segment positions
-	var points: Array[Vector3] = []
+	var control_points: Array[Vector3] = []
 	
 	# Add start point (hand position if available)
 	if start_node:
-		points.append(to_local(start_node.global_position))
+		control_points.append(to_local(start_node.global_position))
 	
 	# Add all segment positions
 	for segment in rope_segments:
-		points.append(to_local(segment.global_position))
+		control_points.append(to_local(segment.global_position))
 	
 	# Add end point (neck position if available)
 	if end_node:
-		points.append(to_local(end_node.global_position))
+		control_points.append(to_local(end_node.global_position))
 	
-	# Generate mesh from points
-	if points.size() >= 2:
-		var mesh = generate_rope_mesh(points)
+	# Generate smooth curve from control points
+	if control_points.size() >= 2:
+		var smooth_points = generate_smooth_curve(control_points)
+		var mesh = generate_rope_mesh(smooth_points)
 		visual_mesh_instance.mesh = mesh
+
+func generate_smooth_curve(control_points: Array[Vector3]) -> Array[Vector3]:
+	if control_points.size() < 2:
+		return control_points
+	
+	var smooth_points: Array[Vector3] = []
+	
+	# For each segment between control points, generate smooth interpolated points
+	for i in range(control_points.size() - 1):
+		var p0 = control_points[max(0, i - 1)]
+		var p1 = control_points[i]
+		var p2 = control_points[i + 1]
+		var p3 = control_points[min(control_points.size() - 1, i + 2)]
+		
+		# Generate smooth points along this segment using Catmull-Rom spline
+		for j in range(curve_smoothness):
+			var t = float(j) / float(curve_smoothness)
+			var point = catmull_rom_interpolate(p0, p1, p2, p3, t)
+			smooth_points.append(point)
+	
+	# Add the final point
+	smooth_points.append(control_points[-1])
+	
+	return smooth_points
+
+func catmull_rom_interpolate(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, t: float) -> Vector3:
+	# Catmull-Rom spline interpolation for smooth curves
+	var t2 = t * t
+	var t3 = t2 * t
+	
+	return 0.5 * (
+		(2.0 * p1) +
+		(-p0 + p2) * t +
+		(2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 +
+		(-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3
+	)
 
 func generate_rope_mesh(points: Array[Vector3]) -> ArrayMesh:
 	var array_mesh = ArrayMesh.new()
