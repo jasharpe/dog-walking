@@ -149,24 +149,56 @@ func calculate_leash_force() -> Vector3:
 	if not leash or leash.rope_segments.is_empty():
 		return Vector3.ZERO
 	
+	# Calculate total leash length and tension
+	var total_length = calculate_total_leash_length()
+	var max_length = leash.segment_count * leash.segment_length
+	var tension_ratio = max(0.0, (total_length - max_length) / max_length)
+	
+	# Only apply force if leash is significantly stretched
+	if tension_ratio < 0.1:  # Less than 10% stretch means slack
+		return Vector3.ZERO
+	
 	# Get the first segment of the leash (attached to man's hand)
 	var first_segment = leash.rope_segments[0]
-	var hand_pos = hand.global_position
 	var character_pos = global_position
+	var hand_pos = hand.global_position
 	var segment_pos = first_segment.global_position
 	
 	# Calculate the vector from character center to first leash segment
 	var to_segment = segment_pos - hand_pos
 	var distance = to_segment.length()
 	
-	# Apply force if there's tension (distance > small threshold)
-	var force_threshold = 0.5  # Small threshold to avoid jitter
-	if distance > force_threshold:
+	if distance > 0.1:
 		var force_direction = to_segment.normalized()
-		var force_magnitude = (distance - force_threshold) * 25.0  # Leash stiffness
+		var force_magnitude = tension_ratio * 30.0  # Force based on overall tension
 		return force_direction * force_magnitude
 	
 	return Vector3.ZERO
+
+func calculate_total_leash_length() -> float:
+	if not leash or leash.rope_segments.size() < 2:
+		return 0.0
+	
+	var total_length = 0.0
+	
+	# Add distance from hand to first segment
+	var hand_pos = hand.global_position
+	var first_segment_pos = leash.rope_segments[0].global_position
+	total_length += hand_pos.distance_to(first_segment_pos)
+	
+	# Add distances between all segments
+	for i in range(leash.rope_segments.size() - 1):
+		var current_pos = leash.rope_segments[i].global_position
+		var next_pos = leash.rope_segments[i + 1].global_position
+		total_length += current_pos.distance_to(next_pos)
+	
+	# Add distance from last segment to dog
+	if dog:
+		var last_segment_pos = leash.rope_segments[-1].global_position
+		var dog_pos = dog.global_position
+		total_length += last_segment_pos.distance_to(dog_pos)
+	
+	return total_length
 
 func handle_physics(delta: float) -> void:
 	# Add gravity

@@ -55,8 +55,9 @@ _surfaces = [{
 blend_shape_mode = 0
 shadow_mesh = SubResource("ArrayMesh_pv73v")
 
-[sub_resource type="SphereShape3D" id="SphereShape3D_ehqem"]
-radius = 1.563
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_6ftm5"]
+radius = 1.53114
+height = 4.06871
 
 [sub_resource type="FontVariation" id="FontVariation_jpk7d"]
 fallbacks = Array[Font]([null])
@@ -73,8 +74,8 @@ mesh = SubResource("ArrayMesh_jpk7d")
 [node name="StaticBody3D" type="StaticBody3D" parent="."]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.712344, 0)
-shape = SubResource("SphereShape3D_ehqem")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0383485, 0)
+shape = SubResource("CapsuleShape3D_6ftm5")
 
 [node name="Interact" type="Label3D" parent="."]
 transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 3.71325, 0)

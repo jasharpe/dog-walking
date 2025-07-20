@@ -118,36 +118,56 @@ func determine_behavior_state(bush_of_interest: Bush) -> void:
 func handle_movement(delta: float) -> void:
 	var desired_force: Vector3
 	if is_heeling:
-		# Use existing heel velocity system for heeling behavior
-		var target_velocity = get_heel_velocity()
-		velocity.x = move_toward(velocity.x, target_velocity.x, heel_acceleration * delta)
-		velocity.z = move_toward(velocity.z, target_velocity.z, heel_acceleration * delta)
+		# Use force-based heeling behavior
+		desired_force = get_heel_force()
 	else:
 		# Use force-based movement for normal behavior
 		desired_force = get_normal_behavior_force()
-		var leash_force = calculate_leash_force()
-		
-		# Combine forces
-		var total_force = desired_force + leash_force
-		
-		# Apply friction
-		var friction_force = Vector3(velocity.x, 0, velocity.z) * -movement_friction * 0.5
-		total_force += friction_force
-		
-		# Apply forces to velocity
-		var acceleration = total_force / 1.0  # Mass = 1.0 for simplicity
-		velocity.x += acceleration.x * delta
-		velocity.z += acceleration.z * delta
-		
-		# Apply damping
-		velocity.x = lerp(velocity.x, 0.0, movement_friction * 0.1 * delta)
-		velocity.z = lerp(velocity.z, 0.0, movement_friction * 0.1 * delta)
+	
+	var leash_force = calculate_leash_force()
+	
+	# Combine forces
+	var total_force = desired_force + leash_force
+	
+	# Apply friction
+	var friction_force = Vector3(velocity.x, 0, velocity.z) * -movement_friction * 0.5
+	total_force += friction_force
+	
+	# Apply forces to velocity
+	var acceleration = total_force / 1.0  # Mass = 1.0 for simplicity
+	velocity.x += acceleration.x * delta
+	velocity.z += acceleration.z * delta
+	
+	# Apply damping
+	velocity.x = lerp(velocity.x, 0.0, movement_friction * 0.1 * delta)
+	velocity.z = lerp(velocity.z, 0.0, movement_friction * 0.1 * delta)
 	
 	# Rotate model to face movement direction
 	var horizontal_velocity = Vector3(velocity.x, 0, velocity.z)
 	if desired_force.length() > 0.1:
 		var target_rotation = atan2(desired_force.x, desired_force.z)
 		rotation.y = lerp_angle(rotation.y, target_rotation, 8.0 * delta)
+
+func get_heel_force() -> Vector3:
+	# Get target heel position (with prediction)
+	var current_heel_pos = man.heel_point.global_position
+	var man_horizontal_vel = Vector3(man_velocity.x, 0, man_velocity.z)
+	var predicted_heel_pos = current_heel_pos + man_horizontal_vel * heel_prediction_time
+	
+	# Calculate how far we are from ideal position
+	var to_heel = predicted_heel_pos - global_position
+	to_heel.y = 0
+	var distance_to_heel = to_heel.length()
+	
+	# Calculate force to reach heel position
+	var direction_to_heel = to_heel.normalized() if distance_to_heel > 0.1 else Vector3.ZERO
+	
+	# Force magnitude based on distance and man's movement
+	var base_force = base_movement_force * dog_strength * 2.0  # Stronger force for heeling
+	var distance_factor = min(distance_to_heel / heel_distance, 2.0)  # Scale with distance
+	var force_magnitude = base_force * distance_factor
+	
+	return direction_to_heel * force_magnitude
 
 func get_heel_velocity() -> Vector3:
 	# Get target heel position (with prediction)
@@ -203,6 +223,15 @@ func calculate_leash_force() -> Vector3:
 	if not leash or leash.rope_segments.is_empty():
 		return Vector3.ZERO
 	
+	# Calculate total leash length and tension
+	var total_length = calculate_total_leash_length()
+	var max_length = leash.segment_count * leash.segment_length
+	var tension_ratio = max(0.0, (total_length - max_length) / max_length)
+	
+	# Only apply force if leash is significantly stretched
+	if tension_ratio < 0.1:  # Less than 10% stretch means slack
+		return Vector3.ZERO
+	
 	# Get the last segment of the leash (attached to dog's neck)
 	var last_segment = leash.rope_segments[-1]
 	var character_pos = global_position
@@ -213,14 +242,37 @@ func calculate_leash_force() -> Vector3:
 	var to_segment = segment_pos - neck_pos
 	var distance = to_segment.length()
 	
-	# Apply force if there's tension (distance > small threshold)
-	var force_threshold = 0.01  # Small threshold to avoid jitter
-	if distance > force_threshold:
+	if distance > 0.1:
 		var force_direction = to_segment.normalized()
-		var force_magnitude = (distance - force_threshold) * 50.0  # Slightly weaker than man
+		var force_magnitude = tension_ratio * 25.0  # Slightly weaker than man
 		return force_direction * force_magnitude
 	
 	return Vector3.ZERO
+
+func calculate_total_leash_length() -> float:
+	if not leash or leash.rope_segments.size() < 2:
+		return 0.0
+	
+	var total_length = 0.0
+	
+	# Add distance from man to first segment
+	if man:
+		var man_pos = man.global_position
+		var first_segment_pos = leash.rope_segments[0].global_position
+		total_length += man_pos.distance_to(first_segment_pos)
+	
+	# Add distances between all segments
+	for i in range(leash.rope_segments.size() - 1):
+		var current_pos = leash.rope_segments[i].global_position
+		var next_pos = leash.rope_segments[i + 1].global_position
+		total_length += current_pos.distance_to(next_pos)
+	
+	# Add distance from last segment to dog
+	var last_segment_pos = leash.rope_segments[-1].global_position
+	var dog_pos = global_position
+	total_length += last_segment_pos.distance_to(dog_pos)
+	
+	return total_length
 
 func get_wander_movement() -> Vector3:
 	wander_timer += get_physics_process_delta_time()
