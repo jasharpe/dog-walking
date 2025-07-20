@@ -2,6 +2,7 @@ extends CharacterBody3D
 class_name Dog
 
 @export var man: Man
+@export var leash: Leash
 @export var leash_length: float
 @onready var neck: Node3D = $Model/RootNode/AnimalArmature/Skeleton3D/Neck/NeckNode
 @onready var ap: AnimationPlayer = $"Model/AnimationPlayer"
@@ -14,9 +15,10 @@ var ANIM_WALK: String = "AnimalArmature|AnimalArmature|AnimalArmature|Walk"
 var ANIM_RUN: String = "AnimalArmature|AnimalArmature|AnimalArmature|Run"
 
 # Dog movement parameters
-var base_movement_speed: float = 3.0
+var base_movement_force: float = 30.0
 var movement_acceleration: float = 15.0
 var movement_friction: float = 15.0
+var dog_strength: float = 1.0
 
 # Leash physics parameters
 var leash_force_multiplier: float = 8.0
@@ -114,18 +116,31 @@ func determine_behavior_state(bush_of_interest: Bush) -> void:
 	is_heeling = false
 
 func handle_movement(delta: float) -> void:
-	var target_velocity = Vector3.ZERO
-	var accel = movement_acceleration
-	
 	if is_heeling:
-		target_velocity = get_heel_velocity()
-		accel = heel_acceleration
+		# Use existing heel velocity system for heeling behavior
+		var target_velocity = get_heel_velocity()
+		velocity.x = move_toward(velocity.x, target_velocity.x, heel_acceleration * delta)
+		velocity.z = move_toward(velocity.z, target_velocity.z, heel_acceleration * delta)
 	else:
-		target_velocity = get_normal_behavior()
-	
-	# Apply movement with acceleration
-	velocity.x = move_toward(velocity.x, target_velocity.x, accel * delta)
-	velocity.z = move_toward(velocity.z, target_velocity.z, accel * delta)
+		# Use force-based movement for normal behavior
+		var desired_force = get_normal_behavior_force()
+		var leash_force = calculate_leash_force()
+		
+		# Combine forces
+		var total_force = desired_force + leash_force
+		
+		# Apply friction
+		var friction_force = Vector3(velocity.x, 0, velocity.z) * -movement_friction * 0.5
+		total_force += friction_force
+		
+		# Apply forces to velocity
+		var acceleration = total_force / 1.0  # Mass = 1.0 for simplicity
+		velocity.x += acceleration.x * delta
+		velocity.z += acceleration.z * delta
+		
+		# Apply damping
+		velocity.x = lerp(velocity.x, 0.0, movement_friction * 0.1 * delta)
+		velocity.z = lerp(velocity.z, 0.0, movement_friction * 0.1 * delta)
 	
 	# Rotate model to face movement direction
 	var horizontal_velocity = Vector3(velocity.x, 0, velocity.z)
@@ -168,33 +183,42 @@ func get_heel_velocity() -> Vector3:
 	
 	return final_velocity
 
-func get_normal_behavior() -> Vector3:
-	if man == null:
-		return get_wander_movement() * base_movement_speed
+func get_normal_behavior_force() -> Vector3:
+	# Get wandering force
+	var wander_direction = get_wander_movement()
+	var wander_force = wander_direction * base_movement_force * dog_strength
 	
-	# Calculate leash physics
-	var man_to_dog = global_position - man.global_position
-	var distance = man_to_dog.length()
-	var slack = leash_length - distance
+	# If there's a bush of interest, add attraction force
+	if bush_of_interest:
+		var to_bush = bush_of_interest.global_position - global_position
+		to_bush.y = 0
+		if to_bush.length() > 0.5:
+			var bush_force = to_bush.normalized() * base_movement_force * 0.8
+			wander_force += bush_force
 	
-	if slack < 0:  # Leash is taut
-		var tension_ratio = abs(slack) / leash_length
-		var leash_direction = -man_to_dog.normalized()
-		var tension_strength = min(tension_ratio, 1.0)
-		var leash_force = leash_direction * leash_force_multiplier * tension_strength
-		
-		# Add some wandering resistance
-		var resistance_force = get_wander_movement() * dog_resistance
-		var combined_force = leash_force + resistance_force
-		
-		# Limit speed
-		if combined_force.length() > base_movement_speed * 2.0:
-			combined_force = combined_force.normalized() * base_movement_speed * 2.0
-		
-		return combined_force
-	else:
-		# Free movement
-		return get_wander_movement() * base_movement_speed
+	return wander_force
+
+func calculate_leash_force() -> Vector3:
+	if not leash or leash.rope_segments.is_empty():
+		return Vector3.ZERO
+	
+	# Get the last segment of the leash (attached to dog's neck)
+	var last_segment = leash.rope_segments[-1]
+	var neck_pos = neck.global_position
+	var segment_pos = last_segment.global_position
+	
+	# Calculate the vector from neck to last leash segment
+	var to_segment = segment_pos - neck_pos
+	var distance = to_segment.length()
+	
+	# Apply force if there's tension (distance > small threshold)
+	var force_threshold = 0.2  # Small threshold to avoid jitter
+	if distance > force_threshold:
+		var force_direction = to_segment.normalized()
+		var force_magnitude = (distance - force_threshold) * 20.0  # Slightly weaker than man
+		return force_direction * force_magnitude
+	
+	return Vector3.ZERO
 
 func get_wander_movement() -> Vector3:
 	wander_timer += get_physics_process_delta_time()
