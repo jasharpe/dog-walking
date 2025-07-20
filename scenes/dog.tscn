@@ -93,10 +93,11 @@ font = SubResource("FontVariation_gmowd")
 font_size = 128
 
 [node name="SmellRadius" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 4
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="SmellRadius"]
 shape = SubResource("SphereShape3D_gmowd")
-disabled = true
 
 [node name="StaticBody3D" type="StaticBody3D" parent="."]
 collision_layer = 2

@@ -72,6 +72,8 @@ script = ExtResource("1_ehqem")
 mesh = SubResource("ArrayMesh_jpk7d")
 
 [node name="StaticBody3D" type="StaticBody3D" parent="."]
+collision_layer = 5
+collision_mask = 0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0383485, 0)

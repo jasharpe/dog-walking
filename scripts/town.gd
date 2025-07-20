@@ -26,7 +26,7 @@ func _ready() -> void:
 		var bush := bush_scene.instantiate() as Bush
 		bush.position = Vector3(randf_range(-25, 25), 0, randf_range(-25, 25))
 		bush.rotate_y(randf_range(0, TAU))
-		if randf_range(0, 1) < 0.5:
+		if true or randf_range(0, 1) < 0.5:
 			bush.interesting = true
 		add_child(bush)
 
