@@ -438,6 +438,8 @@ func setup_visual_mesh():
 	if not debug_mode:
 		visual_mesh_instance = MeshInstance3D.new()
 		visual_mesh_instance.material_override = leash_material
+		# Disable shadow receiving
+		#leash_material.flags_do_not_receive_shadows = true
 		add_child(visual_mesh_instance)
 
 func update_visual_mesh():
@@ -508,30 +510,61 @@ func generate_rope_mesh(points: Array[Vector3]) -> ArrayMesh:
 	var uvs: PackedVector2Array = []
 	var indices: PackedInt32Array = []
 	
-	# Generate vertices around each point
-	for i in range(points.size()):
+	if points.size() < 2:
+		return array_mesh
+	
+	# Initialize the coordinate frame for the first point
+	var forward = (points[1] - points[0]).normalized()
+	var up = Vector3.UP
+	if abs(forward.dot(up)) > 0.9:
+		up = Vector3.RIGHT
+	var right = forward.cross(up).normalized()
+	up = right.cross(forward).normalized()
+	
+	# Store the frames for each point to avoid twisting
+	var frames: Array = []
+	frames.append({"forward": forward, "right": right, "up": up})
+	
+	# Calculate frames for all subsequent points using parallel transport
+	for i in range(1, points.size()):
 		var point = points[i]
-		var forward: Vector3
+		var prev_frame = frames[i - 1]
 		
-		# Calculate forward direction
-		if i == 0:
-			forward = (points[1] - points[0]).normalized()
-		elif i == points.size() - 1:
+		# Calculate new forward direction
+		if i == points.size() - 1:
 			forward = (points[i] - points[i - 1]).normalized()
 		else:
 			forward = (points[i + 1] - points[i - 1]).normalized()
 		
-		# Create perpendicular vectors
-		var up = Vector3.UP
-		if abs(forward.dot(up)) > 0.9:
-			up = Vector3.RIGHT
-		var right = forward.cross(up).normalized()
-		up = right.cross(forward).normalized()
+		# Use parallel transport to minimize twisting
+		var prev_forward = prev_frame.forward
+		var rotation_axis = prev_forward.cross(forward)
+		
+		if rotation_axis.length() > 0.001:
+			# There's a rotation needed
+			rotation_axis = rotation_axis.normalized()
+			var rotation_angle = prev_forward.angle_to(forward)
+			
+			# Rotate the previous right and up vectors
+			right = prev_frame.right.rotated(rotation_axis, rotation_angle)
+			up = prev_frame.up.rotated(rotation_axis, rotation_angle)
+		else:
+			# No rotation needed, keep previous orientation
+			right = prev_frame.right
+			up = prev_frame.up
+		
+		frames.append({"forward": forward, "right": right, "up": up})
+	
+	# Generate vertices using the calculated frames
+	for i in range(points.size()):
+		var point = points[i]
+		var frame = frames[i]
 		
 		# Generate circle of vertices around this point
+		var width: float = 0.4
 		for j in range(mesh_resolution):
 			var angle = j * TAU / mesh_resolution
-			var offset = (right * cos(angle) + up * sin(angle)) * 0.04#segment_radius
+			var offset = (frame.right * cos(angle) + frame.up * sin(angle)) * width
 			var vertex = point + offset
 			
 			vertices.append(vertex)
