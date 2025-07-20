@@ -113,7 +113,7 @@ func determine_behavior_state(bush_of_interest: Bush) -> void:
 	var man_is_moving = man_speed > man_speed_threshold
 	
 	is_heeling = man_is_moving
-	#is_heeling = false
+	is_heeling = true
 
 func handle_movement(delta: float) -> void:
 	var desired_force: Vector3
@@ -223,31 +223,24 @@ func calculate_leash_force() -> Vector3:
 	if not leash or leash.rope_segments.is_empty():
 		return Vector3.ZERO
 	
-	# Calculate total leash length and tension
-	var total_length = calculate_total_leash_length()
-	var max_length = leash.segment_count * leash.segment_length
-	var tension_ratio = max(0.0, (total_length - max_length) / max_length)
-	
-	# Only apply force if leash is significantly stretched
-	if tension_ratio < 0.1:  # Less than 10% stretch means slack
-		return Vector3.ZERO
-	
-	# Get the last segment of the leash (attached to dog's neck)
+	# Measure tension as distance between neck and last leash segment
 	var last_segment = leash.rope_segments[-1]
-	var character_pos = global_position
 	var neck_pos = neck.global_position
 	var segment_pos = last_segment.global_position
+	var tension_distance = neck_pos.distance_to(segment_pos)
 	
-	# Calculate the vector from character center to last leash segment
+	# Only apply force if there's significant tension (distance > threshold)
+	var tension_threshold = 0.3
+	if tension_distance < tension_threshold:
+		return Vector3.ZERO
+	
+	# Calculate force to pull character toward the leash end
 	var to_segment = segment_pos - neck_pos
-	var distance = to_segment.length()
+	var force_direction = to_segment.normalized()
+	var force_magnitude = (tension_distance - tension_threshold) * 35.0  # Slightly weaker than man
 	
-	if distance > 0.1:
-		var force_direction = to_segment.normalized()
-		var force_magnitude = tension_ratio * 25.0  # Slightly weaker than man
-		return force_direction * force_magnitude
-	
-	return Vector3.ZERO
+	# Apply force to character center, not neck
+	return force_direction * force_magnitude
 
 func calculate_total_leash_length() -> float:
 	if not leash or leash.rope_segments.size() < 2:

@@ -96,6 +96,7 @@ font_size = 128
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="SmellRadius"]
 shape = SubResource("SphereShape3D_gmowd")
+disabled = true
 
 [node name="StaticBody3D" type="StaticBody3D" parent="."]
 collision_layer = 2
@@ -103,6 +104,7 @@ collision_layer = 2
 [node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.00432202, 0.54439, 0.00973511)
 shape = SubResource("BoxShape3D_gmowd")
+disabled = true
 
 [node name="StaticBody3D2" type="StaticBody3D" parent="."]
 collision_layer = 2

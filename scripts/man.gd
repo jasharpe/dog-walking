@@ -149,31 +149,24 @@ func calculate_leash_force() -> Vector3:
 	if not leash or leash.rope_segments.is_empty():
 		return Vector3.ZERO
 	
-	# Calculate total leash length and tension
-	var total_length = calculate_total_leash_length()
-	var max_length = leash.segment_count * leash.segment_length
-	var tension_ratio = max(0.0, (total_length - max_length) / max_length)
-	
-	# Only apply force if leash is significantly stretched
-	if tension_ratio < 0.1:  # Less than 10% stretch means slack
-		return Vector3.ZERO
-	
-	# Get the first segment of the leash (attached to man's hand)
+	# Measure tension as distance between hand and first leash segment
 	var first_segment = leash.rope_segments[0]
-	var character_pos = global_position
 	var hand_pos = hand.global_position
 	var segment_pos = first_segment.global_position
+	var tension_distance = hand_pos.distance_to(segment_pos)
 	
-	# Calculate the vector from character center to first leash segment
+	# Only apply force if there's significant tension (distance > threshold)
+	var tension_threshold = 0.3
+	if tension_distance < tension_threshold:
+		return Vector3.ZERO
+	
+	# Calculate force to pull character toward the leash end
 	var to_segment = segment_pos - hand_pos
-	var distance = to_segment.length()
+	var force_direction = to_segment.normalized()
+	var force_magnitude = (tension_distance - tension_threshold) * 40.0
 	
-	if distance > 0.1:
-		var force_direction = to_segment.normalized()
-		var force_magnitude = tension_ratio * 30.0  # Force based on overall tension
-		return force_direction * force_magnitude
-	
-	return Vector3.ZERO
+	# Apply force to character center, not hand
+	return force_direction * force_magnitude
 
 func calculate_total_leash_length() -> float:
 	if not leash or leash.rope_segments.size() < 2:
