@@ -17,8 +17,8 @@ func _ready() -> void:
 	#leash.leash_length = leash_length
 	leash.attach_start_to_node(man)
 	leash.attach_end_to_node(dog)
-	#man.dog = dog
-	#dog.man = man
+	man.dog = dog
+	dog.man = man
 	man.bush_checked.connect(_bush_checked)
 	
 	# TODO: Randomly spawn 20 instances of bush.tscn around a 50m x 50m square centered at the origin.

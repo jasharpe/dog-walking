@@ -27,7 +27,7 @@ var dog_resistance: float = 0.3
 # Heel behavior parameters
 var heel_distance: float = 1.5
 var heel_threshold: float = 0.1
-var man_speed_threshold: float = 3
+var man_speed_threshold: float = 2
 var heel_acceleration: float = 20.0
 var heel_max_speed: float = 12.0
 var heel_prediction_time: float = 0.2
@@ -113,9 +113,10 @@ func determine_behavior_state(bush_of_interest: Bush) -> void:
 	var man_is_moving = man_speed > man_speed_threshold
 	
 	is_heeling = man_is_moving
-	is_heeling = false
+	#is_heeling = false
 
 func handle_movement(delta: float) -> void:
+	var desired_force: Vector3
 	if is_heeling:
 		# Use existing heel velocity system for heeling behavior
 		var target_velocity = get_heel_velocity()
@@ -123,7 +124,7 @@ func handle_movement(delta: float) -> void:
 		velocity.z = move_toward(velocity.z, target_velocity.z, heel_acceleration * delta)
 	else:
 		# Use force-based movement for normal behavior
-		var desired_force = get_normal_behavior_force()
+		desired_force = get_normal_behavior_force()
 		var leash_force = calculate_leash_force()
 		
 		# Combine forces
@@ -144,8 +145,8 @@ func handle_movement(delta: float) -> void:
 	
 	# Rotate model to face movement direction
 	var horizontal_velocity = Vector3(velocity.x, 0, velocity.z)
-	if horizontal_velocity.length() > 0.1:
-		var target_rotation = atan2(horizontal_velocity.x, horizontal_velocity.z)
+	if desired_force.length() > 0.1:
+		var target_rotation = atan2(desired_force.x, desired_force.z)
 		rotation.y = lerp_angle(rotation.y, target_rotation, 8.0 * delta)
 
 func get_heel_velocity() -> Vector3:
@@ -205,17 +206,18 @@ func calculate_leash_force() -> Vector3:
 	# Get the last segment of the leash (attached to dog's neck)
 	var last_segment = leash.rope_segments[-1]
 	var character_pos = global_position
+	var neck_pos = neck.global_position
 	var segment_pos = last_segment.global_position
 	
 	# Calculate the vector from character center to last leash segment
-	var to_segment = segment_pos - character_pos
+	var to_segment = segment_pos - neck_pos
 	var distance = to_segment.length()
 	
 	# Apply force if there's tension (distance > small threshold)
-	var force_threshold = 0.5  # Small threshold to avoid jitter
+	var force_threshold = 0.01  # Small threshold to avoid jitter
 	if distance > force_threshold:
 		var force_direction = to_segment.normalized()
-		var force_magnitude = (distance - force_threshold) * 20.0  # Slightly weaker than man
+		var force_magnitude = (distance - force_threshold) * 50.0  # Slightly weaker than man
 		return force_direction * force_magnitude
 	
 	return Vector3.ZERO
