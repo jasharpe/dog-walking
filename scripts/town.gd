@@ -15,8 +15,8 @@ func _ready() -> void:
 	#leash.neck = dog.neck
 	#leash_length = 1.2 * (leash.hand.global_position - leash.neck.global_position).length()
 	#leash.leash_length = leash_length
-	leash.attach_start_to_node(man.hand)
-	leash.attach_end_to_node(dog.neck)
+	leash.attach_start_to_node(man)
+	leash.attach_end_to_node(dog)
 	#man.dog = dog
 	#dog.man = man
 	man.bush_checked.connect(_bush_checked)

@@ -69,7 +69,7 @@ bones/17/rotation = Quaternion(0.687675, -0.164632, 0.687675, -0.164631)
 mesh = SubResource("ArrayMesh_iaoh4")
 
 [node name="Neck" type="BoneAttachment3D" parent="Model/RootNode/AnimalArmature/Skeleton3D" index="1"]
-transform = Transform3D(-1, -0.000352946, 1.1226e-05, 0.000353037, -0.998543, 0.0539614, -7.83582e-06, 0.0539614, 0.998543, -3.79156e-11, -0.00303023, 0.0129713)
+transform = Transform3D(-1, -0.000352945, 1.1226e-05, 0.000353037, -0.998543, 0.0539615, -7.83581e-06, 0.0539615, 0.998543, -3.79156e-11, -0.00303023, 0.0129713)
 bone_name = "Head"
 bone_idx = 8
 

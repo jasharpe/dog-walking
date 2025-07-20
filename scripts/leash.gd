@@ -14,6 +14,11 @@ class_name Leash
 @export var start_node: Node3D = null  # Node to attach start of rope
 @export var end_node: Node3D = null    # Node to attach end of rope
 
+@export_group("Collision Settings")
+@export_flags_3d_physics var rope_collision_layer: int = 1  # What layer the rope is on
+@export_flags_3d_physics var rope_collision_mask: int = 1   # What the rope collides with
+@export var use_character_exclusion: bool = true  # Auto-exclude character bodies
+
 var rope_segments: Array[RigidBody3D] = []
 var joints: Array[PinJoint3D] = []
 var attachment_joint: PinJoint3D = null
@@ -105,6 +110,14 @@ func create_rope_segment(index: int) -> RigidBody3D:
 	rigid_body.angular_damp = angular_damping
 	rigid_body.continuous_cd = true  # Better collision detection
 	rigid_body.can_sleep = false  # Keep rope active
+	
+	# Set collision layers
+	rigid_body.collision_layer = rope_collision_layer
+	rigid_body.collision_mask = rope_collision_mask
+	
+	# Optional: Set to trigger mode for detection without physics push
+	# rigid_body.freeze = true  # For Godot 4.x
+	# rigid_body.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 	
 	# Create collision shape
 	var collision_shape = CollisionShape3D.new()
@@ -269,7 +282,7 @@ func regenerate_rope():
 	update_rope_stiffness()
 
 # New functions for dual-end attachment
-func attach_start_to_node(node: Node3D, offset: Vector3 = Vector3.ZERO):
+func attach_start_to_node(man: Man, offset: Vector3 = Vector3.ZERO):
 	if rope_segments.is_empty():
 		return
 	
@@ -282,10 +295,10 @@ func attach_start_to_node(node: Node3D, offset: Vector3 = Vector3.ZERO):
 		joints[0].queue_free()
 		joints.remove_at(0)
 	
-	start_node = node
+	start_node = man.hand
 	
 	# Move the first segment to the attachment point immediately
-	rope_segments[0].global_position = node.global_position + offset
+	rope_segments[0].global_position = man.hand.global_position + offset
 	rope_segments[0].set_linear_velocity(Vector3.ZERO)
 	
 	# Create a Generic6DOFJoint3D for more control
@@ -293,8 +306,8 @@ func attach_start_to_node(node: Node3D, offset: Vector3 = Vector3.ZERO):
 	joint.name = "StartAttachmentJoint"
 	add_child(joint)
 	
-	joint.global_position = node.global_position + offset
-	joint.set_node_a(node.get_path())
+	joint.global_position = man.hand.global_position + offset
+	joint.set_node_a(man.hand.get_path())
 	joint.set_node_b(rope_segments[0].get_path())
 	
 	# Lock all axes for a rigid connection
@@ -307,8 +320,13 @@ func attach_start_to_node(node: Node3D, offset: Vector3 = Vector3.ZERO):
 		joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.0)
 	
 	start_joint = joint
+	
+	# Exclude collision with character if it's a CharacterBody3D
+	if use_character_exclusion and man is CharacterBody3D:
+		for segment in rope_segments:
+			segment.add_collision_exception_with(man)
 
-func attach_end_to_node(node: Node3D, offset: Vector3 = Vector3.ZERO):
+func attach_end_to_node(dog: Dog, offset: Vector3 = Vector3.ZERO):
 	if rope_segments.is_empty():
 		return
 	
@@ -316,11 +334,11 @@ func attach_end_to_node(node: Node3D, offset: Vector3 = Vector3.ZERO):
 	if end_joint and is_instance_valid(end_joint):
 		end_joint.queue_free()
 	
-	end_node = node
+	end_node = dog.neck
 	
 	# Move the last segment to the attachment point immediately
 	var tip = get_rope_tip()
-	tip.global_position = node.global_position + offset
+	tip.global_position = dog.neck.global_position + offset
 	tip.set_linear_velocity(Vector3.ZERO)
 	
 	# Create a Generic6DOFJoint3D for more control
@@ -328,9 +346,9 @@ func attach_end_to_node(node: Node3D, offset: Vector3 = Vector3.ZERO):
 	joint.name = "EndAttachmentJoint"
 	add_child(joint)
 	
-	joint.global_position = node.global_position + offset
+	joint.global_position = dog.neck.global_position + offset
 	joint.set_node_a(tip.get_path())
-	joint.set_node_b(node.get_path())
+	joint.set_node_b(dog.neck.get_path())
 	
 	# Lock all axes for a rigid connection
 	for i in range(3):
@@ -342,6 +360,11 @@ func attach_end_to_node(node: Node3D, offset: Vector3 = Vector3.ZERO):
 		joint.set_param_z(Generic6DOFJoint3D.PARAM_LINEAR_UPPER_LIMIT, 0.0)
 	
 	end_joint = joint
+	
+	# Exclude collision with character if it's a CharacterBody3D
+	if use_character_exclusion and dog is CharacterBody3D:
+		for segment in rope_segments:
+			segment.add_collision_exception_with(dog)
 
 func detach_start():
 	if start_joint and is_instance_valid(start_joint):
@@ -364,6 +387,27 @@ func connect_between_nodes(node_a: Node3D, node_b: Node3D):
 	"""Convenience function to connect rope between two nodes"""
 	attach_start_to_node(node_a)
 	attach_end_to_node(node_b)
+
+# Utility function to exclude collision with specific bodies
+func add_collision_exception(body: PhysicsBody3D):
+	"""Add a body that the rope should not physically interact with"""
+	for segment in rope_segments:
+		segment.add_collision_exception_with(body)
+
+func remove_collision_exception(body: PhysicsBody3D):
+	"""Remove a collision exception"""
+	for segment in rope_segments:
+		segment.remove_collision_exception_with(body)
+
+func set_rope_as_sensor(is_sensor: bool):
+	"""Make rope detect collisions but not apply forces (trigger mode)"""
+	for segment in rope_segments:
+		if is_sensor:
+			# Make segments kinematic to stop them from pushing
+			segment.freeze = true
+			segment.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+		else:
+			segment.freeze = false
 
 # Debug visualization
 func draw_rope_debug():
