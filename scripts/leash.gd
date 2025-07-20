@@ -14,6 +14,11 @@ class_name Leash
 @export var start_node: Node3D = null  # Node to attach start of rope
 @export var end_node: Node3D = null    # Node to attach end of rope
 
+@export_group("Visual Settings")
+@export var debug_mode: bool = false
+@export var leash_color: Color = Color(0.6, 0.4, 0.2)  # Brown color
+@export var mesh_resolution: int = 8  # Radial segments for the mesh
+
 @export_group("Collision Settings")
 @export_flags_3d_physics var rope_collision_layer: int = 1  # What layer the rope is on
 @export_flags_3d_physics var rope_collision_mask: int = 1   # What the rope collides with
@@ -25,8 +30,13 @@ var attachment_joint: PinJoint3D = null
 var start_joint: Node3D = null  # Can be PinJoint3D or Generic6DOFJoint3D
 var end_joint: Node3D = null    # Can be PinJoint3D or Generic6DOFJoint3D
 
+# Visual mesh components
+var visual_mesh_instance: MeshInstance3D = null
+var leash_material: StandardMaterial3D = null
+
 func _ready():
 	generate_rope()
+	setup_visual_mesh()
 	rotation.z = PI / 2
 	
 	# Connect to nodes if set in inspector
@@ -39,6 +49,10 @@ func _process(delta: float):
 	if rope_segments.size() > 0:
 		$Camera3D.position = rope_segments[0].position + Vector3(0, 1, -3)
 		$Camera3D.look_at(rope_segments[0].position, Vector3.UP)
+	
+	# Update visual mesh if not in debug mode
+	if not debug_mode:
+		update_visual_mesh()
 
 func _physics_process(delta: float):
 	# Update rope position if attached to nodes by applying forces
@@ -126,13 +140,14 @@ func create_rope_segment(index: int) -> RigidBody3D:
 	capsule_shape.height = segment_length
 	collision_shape.shape = capsule_shape
 	
-	# Create visual mesh
+	# Create visual mesh (only visible in debug mode)
 	var mesh_instance = MeshInstance3D.new()
 	var capsule_mesh = CapsuleMesh.new()
 	capsule_mesh.radius = segment_radius
 	# Make segments slightly overlap for visual continuity
 	capsule_mesh.height = segment_length * 1.1
 	mesh_instance.mesh = capsule_mesh
+	mesh_instance.visible = debug_mode
 	
 	# Apply material if provided
 	if rope_material:
@@ -410,6 +425,107 @@ func set_rope_as_sensor(is_sensor: bool):
 			segment.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 		else:
 			segment.freeze = false
+
+func setup_visual_mesh():
+	# Create material for the leash
+	leash_material = StandardMaterial3D.new()
+	leash_material.albedo_color = leash_color
+	leash_material.roughness = 0.8
+	leash_material.metallic = 0.0
+	
+	# Create the mesh instance for non-debug mode
+	if not debug_mode:
+		visual_mesh_instance = MeshInstance3D.new()
+		visual_mesh_instance.material_override = leash_material
+		add_child(visual_mesh_instance)
+
+func update_visual_mesh():
+	if not visual_mesh_instance or rope_segments.is_empty():
+		return
+	
+	# Get all segment positions
+	var points: Array[Vector3] = []
+	
+	# Add start point (hand position if available)
+	if start_node:
+		points.append(to_local(start_node.global_position))
+	
+	# Add all segment positions
+	for segment in rope_segments:
+		points.append(to_local(segment.global_position))
+	
+	# Add end point (neck position if available)
+	if end_node:
+		points.append(to_local(end_node.global_position))
+	
+	# Generate mesh from points
+	if points.size() >= 2:
+		var mesh = generate_rope_mesh(points)
+		visual_mesh_instance.mesh = mesh
+
+func generate_rope_mesh(points: Array[Vector3]) -> ArrayMesh:
+	var array_mesh = ArrayMesh.new()
+	var vertices: PackedVector3Array = []
+	var normals: PackedVector3Array = []
+	var uvs: PackedVector2Array = []
+	var indices: PackedInt32Array = []
+	
+	# Generate vertices around each point
+	for i in range(points.size()):
+		var point = points[i]
+		var forward: Vector3
+		
+		# Calculate forward direction
+		if i == 0:
+			forward = (points[1] - points[0]).normalized()
+		elif i == points.size() - 1:
+			forward = (points[i] - points[i - 1]).normalized()
+		else:
+			forward = (points[i + 1] - points[i - 1]).normalized()
+		
+		# Create perpendicular vectors
+		var up = Vector3.UP
+		if abs(forward.dot(up)) > 0.9:
+			up = Vector3.RIGHT
+		var right = forward.cross(up).normalized()
+		up = right.cross(forward).normalized()
+		
+		# Generate circle of vertices around this point
+		for j in range(mesh_resolution):
+			var angle = j * TAU / mesh_resolution
+			var offset = (right * cos(angle) + up * sin(angle)) * 0.04#segment_radius
+			var vertex = point + offset
+			
+			vertices.append(vertex)
+			normals.append(offset.normalized())
+			uvs.append(Vector2(float(j) / mesh_resolution, float(i) / (points.size() - 1)))
+	
+	# Generate indices for triangles
+	for i in range(points.size() - 1):
+		for j in range(mesh_resolution):
+			var current_ring = i * mesh_resolution
+			var next_ring = (i + 1) * mesh_resolution
+			var next_j = (j + 1) % mesh_resolution
+			
+			# Two triangles per quad
+			indices.append(current_ring + j)
+			indices.append(next_ring + j)
+			indices.append(current_ring + next_j)
+			
+			indices.append(current_ring + next_j)
+			indices.append(next_ring + j)
+			indices.append(next_ring + next_j)
+	
+	# Create the mesh
+	var arrays = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	
+	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return array_mesh
 
 # Debug visualization
 func draw_rope_debug():
