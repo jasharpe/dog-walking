@@ -48,7 +48,7 @@ base_font = ExtResource("3_qjqk5")
 radius = 4.712
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_gmowd"]
-size = Vector3(0.832619, 1.079, 1.418)
+size = Vector3(0.832619, 0.544177, 1.40053)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_tpbal"]
 size = Vector3(2000.46, 0.695332, 0.722626)
@@ -66,24 +66,22 @@ shape = SubResource("BoxShape3D_vwjdu")
 [node name="Model" parent="." instance=ExtResource("1_on80e")]
 
 [node name="Skeleton3D" parent="Model/RootNode/AnimalArmature" index="0"]
-bones/0/position = Vector3(-4.32577e-19, 1.34813e-05, 0.00395352)
-bones/1/rotation = Quaternion(0.629281, -0.322499, -0.629281, 0.322499)
-bones/4/rotation = Quaternion(0.581302, 0.402601, -0.581302, -0.402601)
-bones/8/rotation = Quaternion(-0.000176623, 0.999636, -0.0269907, -1.49179e-06)
-bones/11/rotation = Quaternion(-0.0039561, -1.10661e-10, -1.10661e-10, 0.999992)
-bones/14/rotation = Quaternion(0.599436, 0.375068, 0.599436, 0.375068)
-bones/17/rotation = Quaternion(0.687675, -0.164632, 0.687675, -0.164631)
+bones/1/rotation = Quaternion(0.707107, -9.41569e-08, -0.707107, -9.4157e-08)
+bones/4/rotation = Quaternion(0.707107, 9.41569e-08, -0.707107, 9.4157e-08)
+bones/8/rotation = Quaternion(6.12325e-17, 1, 6.12325e-17, -2.39685e-06)
+bones/14/rotation = Quaternion(0.707107, -5.33851e-08, 0.707107, 5.33851e-08)
+bones/17/rotation = Quaternion(0.707107, 5.33851e-08, 0.707107, -5.33851e-08)
 
 [node name="Dog" parent="Model/RootNode/AnimalArmature/Skeleton3D" index="0"]
 mesh = SubResource("ArrayMesh_iaoh4")
 
 [node name="Neck" type="BoneAttachment3D" parent="Model/RootNode/AnimalArmature/Skeleton3D" index="1"]
-transform = Transform3D(-1, -0.000352945, 1.1226e-05, 0.000353037, -0.998543, 0.0539615, -7.83581e-06, 0.0539615, 0.998543, -3.79156e-11, -0.00303023, 0.0129713)
+transform = Transform3D(-1, -6.81999e-13, -1.12741e-07, 8.12143e-13, -1, -2.38419e-07, -1.12741e-07, -2.38419e-07, 1, -3.79156e-11, -0.00303023, 0.0129579)
 bone_name = "Head"
 bone_idx = 8
 
 [node name="NeckNode" type="Node3D" parent="Model/RootNode/AnimalArmature/Skeleton3D/Neck"]
-transform = Transform3D(1, -2.61934e-10, 7.27596e-12, -1.16415e-10, 1, 1.11759e-08, -1.81899e-12, 0, 1, 3.2894e-08, 0.00174265, -0.00321089)
+transform = Transform3D(1, -2.61935e-10, 7.25464e-12, -1.16415e-10, 1, 1.11759e-08, -1.69821e-12, 0, 1, 3.29294e-08, 0.00414981, -0.00352415)
 
 [node name="Alert" type="Label3D" parent="."]
 transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 3, 0)
@@ -103,9 +101,8 @@ shape = SubResource("SphereShape3D_gmowd")
 collision_layer = 2
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.00432202, 0.54439, 0.00973511)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.00432202, 0.709326, 0.000999272)
 shape = SubResource("BoxShape3D_gmowd")
-disabled = true
 
 [node name="StaticBody3D2" type="StaticBody3D" parent="."]
 collision_layer = 2

@@ -17,7 +17,7 @@ var ANIM_RUN: String = "AnimalArmature|AnimalArmature|AnimalArmature|Run"
 # Dog movement parameters
 var base_movement_force: float = 5.0
 var movement_acceleration: float = 15.0
-var movement_friction: float = 15.0
+var movement_friction: float = 20.0
 var dog_strength: float = 1.0
 
 # Leash physics parameters
@@ -38,7 +38,7 @@ var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 # Dog AI behavior
 var wander_target: Vector3
 var wander_timer: float = 0.0
-var wander_change_interval: float = 2.0
+var wander_change_interval: float = 10.0
 
 # Man movement tracking
 var man_previous_position: Vector3
@@ -52,35 +52,10 @@ func _ready() -> void:
 	if man:
 		man_previous_position = man.global_position
 	
-	# Debug: Check smell radius setup
-	print("SmellRadius shape: ", smell_radius.get_node("CollisionShape3D").shape)
-	print("SmellRadius disabled: ", smell_radius.get_node("CollisionShape3D").disabled)
-	var shape = smell_radius.get_node("CollisionShape3D").shape as SphereShape3D
-	if shape:
-		print("SmellRadius radius: ", shape.radius)
-	
-	# Temporary fix: Set collision mask to detect all layers
-	#smell_radius.collision_mask = 0xFFFFFFFF  # All layers
-
 var bush_of_interest: Bush
 
 func _physics_process(delta: float) -> void:
 	var bodies := smell_radius.get_overlapping_bodies()
-	
-	# Debug: Print smell radius info
-	#print("SmellRadius collision_mask: ", smell_radius.collision_mask)
-	#print("SmellRadius monitoring: ", smell_radius.monitoring)
-	#print("SmellRadius monitorable: ", smell_radius.monitorable)
-	#print("Bodies detected: ", bodies.size())
-	
-	# Debug: Print info about detected bodies
-	if bodies.size() > 0:
-		print("Dog detected ", bodies.size(), " bodies:")
-		for body in bodies:
-			var parent = body.get_parent()
-			print("  Body: ", body.name, " Parent: ", parent.name if parent else "null", " Is Bush: ", parent is Bush if parent else false)
-			if parent is Bush:
-				print("    Bush interesting: ", parent.interesting)
 	
 	if bush_of_interest and bush_of_interest.interesting and bush_of_interest in bodies.map(func(body): return body.get_parent()):
 		pass
@@ -139,7 +114,6 @@ func determine_behavior_state(bush_of_interest: Bush) -> void:
 	var man_is_moving = man_speed > man_speed_threshold
 	
 	is_heeling = man_is_moving
-	is_heeling = true
 
 func handle_movement(delta: float) -> void:
 	var desired_force: Vector3
@@ -178,7 +152,7 @@ func handle_movement(delta: float) -> void:
 	var horizontal_velocity = Vector3(velocity.x, 0, velocity.z)
 	if desired_force.length() > 0.1:
 		var target_rotation = atan2(desired_force.x, desired_force.z)
-		rotation.y = lerp_angle(rotation.y, target_rotation, 8.0 * delta)
+		rotation.y = lerp_angle(rotation.y, target_rotation, 10.0 * delta)
 
 func get_heel_force() -> Vector3:
 	# Get target heel position (with prediction)
@@ -195,7 +169,7 @@ func get_heel_force() -> Vector3:
 	var direction_to_heel = to_heel.normalized() if distance_to_heel > 0.1 else Vector3.ZERO
 	
 	# Force magnitude based on distance and man's movement
-	var base_force = base_movement_force * dog_strength * 2.0  # Stronger force for heeling
+	var base_force = base_movement_force * dog_strength * 6.0  # Stronger force for heeling
 	var distance_factor = min(distance_to_heel / heel_distance, 2.0)  # Scale with distance
 	var force_magnitude = base_force * distance_factor
 	
@@ -239,7 +213,7 @@ func get_heel_velocity() -> Vector3:
 func get_normal_behavior_force() -> Vector3:
 	# Get wandering force
 	var wander_direction = get_wander_movement()
-	var wander_force = wander_direction * base_movement_force * dog_strength
+	var wander_force = 3 * wander_direction * base_movement_force * dog_strength
 	
 	# If there's a bush of interest, add attraction force
 	if bush_of_interest:
@@ -262,7 +236,7 @@ func calculate_leash_force() -> Vector3:
 	var tension_distance = neck_pos.distance_to(segment_pos)
 	
 	# Only apply force if there's significant tension (distance > threshold)
-	var tension_threshold = 0.3
+	var tension_threshold = 1.0
 	if tension_distance < tension_threshold:
 		return Vector3.ZERO
 	

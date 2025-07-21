@@ -1,7 +1,7 @@
 extends Node3D
 class_name Leash
 
-@export var segment_count: int = 20
+@export var segment_count: int = 10
 @export var segment_length: float = 0.5
 @export var segment_radius: float = 0.1
 @export var rope_mass: float = 1.0

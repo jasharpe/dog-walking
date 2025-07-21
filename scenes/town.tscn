@@ -14,7 +14,7 @@
 
 [sub_resource type="Resource" id="Resource_5q1rr"]
 script = ExtResource("2_v3ani")
-text = "Check 3 Bushes"
+text = "Check 3 Interesting Bushes"
 total = 3
 metadata/_custom_type_script = "uid://b5o51dlj2vgi7"
 
